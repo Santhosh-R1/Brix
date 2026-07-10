@@ -23,7 +23,9 @@ use std::{fs, net::SocketAddr, process};
 use tower_http::cors::CorsLayer;
 
 // Tray & Event Loop Imports
+#[cfg(windows)]
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
+#[cfg(windows)]
 use tray_icon::{
     Icon, TrayIconBuilder,
     menu::{Menu, MenuEvent, MenuItem},
@@ -142,6 +144,7 @@ async fn init_db(pool: &PgPool) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // 🔥 Helper to load icon for tray
+#[cfg(windows)]
 fn load_tray_icon() -> Icon {
     let icon_bytes = include_bytes!("../../../../src-tauri/icons/32x32.png");
     let image = image::load_from_memory(icon_bytes)
@@ -152,16 +155,13 @@ fn load_tray_icon() -> Icon {
     Icon::from_rgba(rgba, width, height).expect("Failed to create tray icon")
 }
 
+#[cfg(windows)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Check for TUI launch argument
     let args: Vec<String> = std::env::args().collect();
     if args.contains(&"--t".to_string()) || args.contains(&"-t".to_string()) {
         let exe_path = std::env::current_exe().unwrap_or_default();
-        let tui_path = exe_path.with_file_name(if cfg!(windows) {
-            "openprix-tui.exe"
-        } else {
-            "openprix-tui"
-        });
+        let tui_path = exe_path.with_file_name("openprix-tui.exe");
         let _ = std::process::Command::new(&tui_path).spawn();
         return Ok(());
     }
@@ -185,53 +185,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 4.5 Start Python backend server in the background
     std::thread::spawn(|| {
-        let mut path = std::env::current_dir().unwrap_or_default();
-        let mut found = false;
-        for _ in 0..5 {
-            let candidate = path.join("main.py");
-            if candidate.exists() {
-                path = candidate;
-                found = true;
-                break;
-            }
-            if let Some(parent) = path.parent() {
-                path = parent.to_path_buf();
-            } else {
-                break;
-            }
-        }
-        if found {
-            let app_dir = path.parent().unwrap().to_str().unwrap().to_string();
-            println!("Found python backend at {:?}", path);
-            
-            // Clean up any old process using port 8000
-            if cfg!(target_os = "windows") {
-                let _ = std::process::Command::new("powershell")
-                    .args(&[
-                        "-Command",
-                        "Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }",
-                    ])
-                    .output();
-            }
-
-            // Try spawning with "py" first
-            let mut cmd = std::process::Command::new("py");
-            cmd.args(&["-m", "uvicorn", "main:app", "--app-dir", &app_dir, "--port", "8000"]);
-            if cmd.spawn().is_err() {
-                // Fallback to "python"
-                let mut cmd_fallback = std::process::Command::new("python");
-                cmd_fallback.args(&["-m", "uvicorn", "main:app", "--app-dir", &app_dir, "--port", "8000"]);
-                if let Err(e) = cmd_fallback.spawn() {
-                    eprintln!("Failed to start python backend: {:?}", e);
-                } else {
-                    println!("Python backend started successfully via python");
-                }
-            } else {
-                println!("Python backend started successfully via py");
-            }
-        } else {
-            eprintln!("Could not locate main.py to start the Python backend.");
-        }
+        start_python_backend();
     });
 
     // 5. Spawn Axum Server in Background Tokio Runtime
@@ -255,6 +209,81 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     });
+}
+
+#[cfg(not(windows))]
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Check for TUI launch argument
+    let args: Vec<String> = std::env::args().collect();
+    if args.contains(&"--t".to_string()) || args.contains(&"-t".to_string()) {
+        let exe_path = std::env::current_exe().unwrap_or_default();
+        let tui_path = exe_path.with_file_name("openprix-tui");
+        let _ = std::process::Command::new(&tui_path).spawn();
+        return Ok(());
+    }
+
+    // 4.5 Start Python backend server in the background
+    std::thread::spawn(|| {
+        start_python_backend();
+    });
+
+    // 5. Run Axum Server directly on tokio runtime
+    if let Err(e) = run_server().await {
+        eprintln!("Server Error: {}", e);
+    }
+    
+    Ok(())
+}
+
+fn start_python_backend() {
+    let mut path = std::env::current_dir().unwrap_or_default();
+    let mut found = false;
+    for _ in 0..5 {
+        let candidate = path.join("main.py");
+        if candidate.exists() {
+            path = candidate;
+            found = true;
+            break;
+        }
+        if let Some(parent) = path.parent() {
+            path = parent.to_path_buf();
+        } else {
+            break;
+        }
+    }
+    if found {
+        let app_dir = path.parent().unwrap().to_str().unwrap().to_string();
+        println!("Found python backend at {:?}", path);
+        
+        // Clean up any old process using port 8000
+        if cfg!(target_os = "windows") {
+            let _ = std::process::Command::new("powershell")
+                .args(&[
+                    "-Command",
+                    "Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }",
+                ])
+                .output();
+        }
+
+        // Try spawning with "py" first
+        let mut cmd = std::process::Command::new("py");
+        cmd.args(&["-m", "uvicorn", "main:app", "--app-dir", &app_dir, "--port", "8000"]);
+        if cmd.spawn().is_err() {
+            // Fallback to "python"
+            let mut cmd_fallback = std::process::Command::new("python");
+            cmd_fallback.args(&["-m", "uvicorn", "main:app", "--app-dir", &app_dir, "--port", "8000"]);
+            if let Err(e) = cmd_fallback.spawn() {
+                eprintln!("Failed to start python backend: {:?}", e);
+            } else {
+                println!("Python backend started successfully via python");
+            }
+        } else {
+            println!("Python backend started successfully via py");
+        }
+    } else {
+        eprintln!("Could not locate main.py to start the Python backend.");
+    }
 }
 
 // 🔥 THE LOCALHOST GATEKEEPER
