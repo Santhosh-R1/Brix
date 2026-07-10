@@ -7,7 +7,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::Value;
 use shared::AppSetting;
-use sqlx::SqlitePool; // 👈 Import the helper
+use sqlx::PgPool; // 👈 Import the helper
 
 #[derive(Deserialize)]
 pub struct SaveSettingPayload {
@@ -15,10 +15,10 @@ pub struct SaveSettingPayload {
 }
 
 pub async fn get_settings(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(key): Path<String>,
 ) -> Result<Json<ApiResponse<Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let res = sqlx::query_as::<_, AppSetting>("SELECT * FROM app_settings WHERE key = ?")
+    let res = sqlx::query_as::<_, AppSetting>("SELECT * FROM app_settings WHERE key = $1")
         .bind(key)
         .fetch_optional(&pool)
         .await
@@ -48,7 +48,7 @@ pub async fn get_settings(
 }
 
 pub async fn save_settings(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(key): Path<String>,
     Json(payload): Json<SaveSettingPayload>,
 ) -> Result<Json<ApiResponse<bool>>, (StatusCode, Json<ApiResponse<()>>)> {
@@ -59,7 +59,7 @@ pub async fn save_settings(
 
     // 🚀 Using the new helper function
     api_response(
-        sqlx::query("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)")
+        sqlx::query("INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value")
             .bind(key)
             .bind(val_str)
             .execute(&pool)

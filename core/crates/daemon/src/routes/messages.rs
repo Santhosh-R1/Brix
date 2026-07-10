@@ -3,7 +3,7 @@ use axum::extract::{Path, Query, State};
 use axum::{Json, extract::Multipart, http::StatusCode};
 use serde::Deserialize;
 use shared::{Message, PrivateMessage};
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use std::collections::HashMap;
 use std::path::Path as StdPath;
 use tokio::fs;
@@ -31,12 +31,12 @@ pub struct SendPrivateMessage {
 }
 
 pub async fn get_messages(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<ApiResponse<Vec<Message>>>, (StatusCode, Json<ApiResponse<()>>)> {
     let q = if let Some(pid) = params.get("projectId") {
         sqlx::query_as::<_, Message>(
-            "SELECT * FROM messages WHERE projectId = ? ORDER BY createdAt ASC",
+            "SELECT * FROM messages WHERE projectId = $1 ORDER BY createdAt ASC",
         )
         .bind(pid)
         .fetch_all(&pool)
@@ -52,7 +52,7 @@ pub async fn get_messages(
 }
 
 pub async fn save_message(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Json(payload): Json<SendMessage>,
 ) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
@@ -60,7 +60,7 @@ pub async fn save_message(
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
-    let q = "INSERT INTO messages (id, projectId, senderId, content, replyToId, createdAt) VALUES (?, ?, ?, ?, ?, ?)";
+    let q = "INSERT INTO messages (id, projectId, senderId, content, replyToId, createdAt) VALUES ($1, $2, $3, $4, $5, $6)";
     api_response(
         sqlx::query(q)
             .bind(&id)
@@ -77,11 +77,11 @@ pub async fn save_message(
 }
 
 pub async fn delete_message(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<bool>>, (StatusCode, Json<ApiResponse<()>>)> {
     api_response(
-        sqlx::query("DELETE FROM messages WHERE id = ?")
+        sqlx::query("DELETE FROM messages WHERE id = $1")
             .bind(id)
             .execute(&pool)
             .await
@@ -91,10 +91,10 @@ pub async fn delete_message(
 }
 
 pub async fn get_private_messages(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path((u1, u2)): Path<(String, String)>,
 ) -> Result<Json<ApiResponse<Vec<PrivateMessage>>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let q = "SELECT * FROM private_messages WHERE (senderId = ? AND receiverId = ?) OR (senderId = ? AND receiverId = ?) ORDER BY createdAt ASC";
+    let q = "SELECT * FROM private_messages WHERE (senderId = $1 AND receiverId = $2) OR (senderId = $3 AND receiverId = $4) ORDER BY createdAt ASC";
     api_response(
         sqlx::query_as::<_, PrivateMessage>(q)
             .bind(&u1)
@@ -108,7 +108,7 @@ pub async fn get_private_messages(
 }
 
 pub async fn save_private_message(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Json(payload): Json<SendPrivateMessage>,
 ) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
@@ -116,7 +116,7 @@ pub async fn save_private_message(
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
-    let q = "INSERT INTO private_messages (id, senderId, receiverId, content, replyToId, createdAt) VALUES (?, ?, ?, ?, ?, ?)";
+    let q = "INSERT INTO private_messages (id, senderId, receiverId, content, replyToId, createdAt) VALUES ($1, $2, $3, $4, $5, $6)";
     api_response(
         sqlx::query(q)
             .bind(&id)
@@ -133,11 +133,11 @@ pub async fn save_private_message(
 }
 
 pub async fn delete_private_message(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<bool>>, (StatusCode, Json<ApiResponse<()>>)> {
     api_response(
-        sqlx::query("DELETE FROM private_messages WHERE id = ?")
+        sqlx::query("DELETE FROM private_messages WHERE id = $1")
             .bind(id)
             .execute(&pool)
             .await
@@ -149,7 +149,7 @@ pub async fn delete_private_message(
 // Dummy endpoints to keep React happy until implemented
 // 🔥 THE REAL NOTIFICATION ENGINE
 pub async fn check_notifications(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Json<ApiResponse<i32>> {
     let user_id = params.get("userId").cloned().unwrap_or_default();
@@ -159,7 +159,7 @@ pub async fn check_notifications(
         .unwrap_or(0);
 
     // 1. Count unread Global & Project messages (excluding ones you sent yourself)
-    let global_query = "SELECT COUNT(*) FROM messages WHERE senderId != ? AND createdAt > ?";
+    let global_query = "SELECT COUNT(*) FROM messages WHERE senderId != $1 AND createdAt > $2";
     let global_count: (i32,) = sqlx::query_as(global_query)
         .bind(&user_id)
         .bind(last_checked)
@@ -168,7 +168,7 @@ pub async fn check_notifications(
         .unwrap_or((0,));
 
     // 2. Count unread Direct Messages (specifically sent to you)
-    let dm_query = "SELECT COUNT(*) FROM private_messages WHERE receiverId = ? AND createdAt > ?";
+    let dm_query = "SELECT COUNT(*) FROM private_messages WHERE receiverId = $1 AND createdAt > $2";
     let dm_count: (i32,) = sqlx::query_as(dm_query)
         .bind(&user_id)
         .bind(last_checked)
@@ -287,3 +287,4 @@ pub async fn upload_chat_file(
 
     crate::routes::api_response(Ok(saved_paths.join(",")))
 }
+

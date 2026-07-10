@@ -3,7 +3,7 @@ use axum::{Json, extract::State};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, SqlitePool};
+use sqlx::{FromRow, PgPool};
 
 #[derive(Deserialize)]
 pub struct LoginPayload {
@@ -49,13 +49,13 @@ struct DbUser {
 pub const JWT_SECRET: &[u8] = b"OPENPRIX_SUPER_SECRET_KEY_CHANGE_ME";
 
 pub async fn login(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Json(payload): Json<LoginPayload>,
 ) -> Json<ApiResponse<LoginResponse>> {
     let un = payload.username.trim().to_lowercase();
 
     let record = sqlx::query_as::<_, DbUser>(
-        "SELECT id, name, password, role, accessLevel, globalPermissions FROM org_staff WHERE username = ?"
+        "SELECT id, name, password, role, accessLevel, globalPermissions FROM org_staff WHERE username = $1"
     )
     .bind(un)
     .fetch_optional(&pool)

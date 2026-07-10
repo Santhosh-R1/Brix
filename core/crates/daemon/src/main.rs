@@ -15,8 +15,8 @@ use rust_embed::RustEmbed;
 use serde_json::Value;
 use shared::DaemonStatus;
 use sqlx::{
-    SqlitePool,
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    PgPool,
+    postgres::{PgConnectOptions, PgPoolOptions},
 };
 use std::str::FromStr;
 use std::{fs, net::SocketAddr, process};
@@ -65,7 +65,7 @@ pub fn get_openprix_dir() -> std::path::PathBuf {
     dir
 }
 
-async fn init_db(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
+async fn init_db(pool: &PgPool) -> Result<(), Box<dyn std::error::Error>> {
     let schema = "
         CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT);
         CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT, code TEXT, clientName TEXT, status TEXT, region TEXT, projectLead TEXT, siteSupervisor TEXT, pmc TEXT, architect TEXT, structuralEngineer TEXT, isPriceLocked INTEGER, dailyLogs TEXT, actualResources TEXT, ganttTasks TEXT, subcontractors TEXT, phaseAssignments TEXT, createdAt INTEGER, raBills TEXT, purchaseOrders TEXT, materialRequests TEXT, grns TEXT, type TEXT, location TEXT, isScaffolded INTEGER, scaffoldPath TEXT, isManuallyLinked INTEGER, dailySchedules TEXT, resourceTrackingMode TEXT, assignedStaff TEXT);
@@ -101,7 +101,7 @@ async fn init_db(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
     if count.0 == 0 {
         let admin_insert = "
             INSERT INTO org_staff (id, name, designation, department, status, email, phone, createdAt, username, password, role, accessLevel, globalPermissions)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ";
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -312,7 +312,7 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     let root_dir = get_openprix_dir();
     let config_path = root_dir.join(".daemon_config.json");
     let status_path = root_dir.join(".daemon_status.json");
-    let db_path = root_dir.join("database.sqlite");
+
 
     let configured_port: u16 = fs::read_to_string(&config_path)
         .ok()
@@ -328,19 +328,15 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     let config = serde_json::json!({ "port": actual_port });
     let _ = fs::write(&config_path, config.to_string());
 
-    let db_url = format!("sqlite://{}", db_path.to_str().unwrap_or(""));
-    let connect_options = SqliteConnectOptions::from_str(&db_url)?.create_if_missing(true);
-    let pool = SqlitePoolOptions::new()
+    // Postgres connection handling
+    let db_url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/openprix".to_string());
+    
+    let connect_options = PgConnectOptions::from_str(&db_url)?;
+    let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect_with(connect_options)
         .await?;
-
-    let _ = sqlx::query("PRAGMA journal_mode = WAL;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::query("PRAGMA synchronous = NORMAL;")
-        .execute(&pool)
-        .await;
 
     init_db(&pool).await?;
 

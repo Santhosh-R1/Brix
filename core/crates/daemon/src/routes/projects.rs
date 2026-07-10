@@ -6,7 +6,7 @@ use axum::{
 };
 use serde::Deserialize;
 use shared::{Project, ProjectDocument};
-use sqlx::{QueryBuilder, Sqlite, SqlitePool};
+use sqlx::{QueryBuilder, PgPool};
 use std::path::Path as StdPath;
 use tokio::fs;
 
@@ -95,7 +95,7 @@ pub struct CreateDocument {
 }
 
 pub async fn get_projects(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
 ) -> Result<Json<ApiResponse<Vec<Project>>>, (StatusCode, Json<ApiResponse<()>>)> {
     api_response(
         sqlx::query_as::<_, Project>("SELECT * FROM projects")
@@ -106,10 +106,10 @@ pub async fn get_projects(
 }
 
 pub async fn get_project(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<Project>>, (StatusCode, Json<ApiResponse<()>>)> {
-    match sqlx::query_as::<_, Project>("SELECT * FROM projects WHERE id = ?")
+    match sqlx::query_as::<_, Project>("SELECT * FROM projects WHERE id = $1")
         .bind(id)
         .fetch_optional(&pool)
         .await
@@ -140,7 +140,7 @@ pub async fn get_project(
 }
 
 pub async fn add_project(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Json(payload): Json<CreateProject>,
 ) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
@@ -149,7 +149,7 @@ pub async fn add_project(
         .unwrap()
         .as_millis() as i64;
 
-    let q = "INSERT INTO projects (id, name, code, clientName, status, region, type, location, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    let q = "INSERT INTO projects (id, name, code, clientName, status, region, type, location, createdAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)";
     api_response(
         sqlx::query(q)
             .bind(&id)
@@ -169,11 +169,11 @@ pub async fn add_project(
 }
 
 pub async fn update_project(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(id): Path<String>,
     Json(payload): Json<UpdateProject>,
 ) -> Result<Json<ApiResponse<bool>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new("UPDATE projects SET ");
+    let mut qb: QueryBuilder<sqlx::Postgres> = QueryBuilder::new("UPDATE projects SET ");
     let mut has_fields = false;
 
     // 🔥 Sanitize plain text fields to prevent XSS injection
@@ -393,22 +393,22 @@ pub async fn update_project(
 }
 
 pub async fn delete_project(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<bool>>, (StatusCode, Json<ApiResponse<()>>)> {
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
         Err(e) => return api_response(Err(e.to_string())),
     };
-    let _ = sqlx::query("DELETE FROM projects WHERE id = ?")
+    let _ = sqlx::query("DELETE FROM projects WHERE id = $1")
         .bind(&id)
         .execute(&mut *tx)
         .await;
-    let _ = sqlx::query("DELETE FROM project_boq WHERE projectId = ?")
+    let _ = sqlx::query("DELETE FROM project_boq WHERE projectId = $1")
         .bind(&id)
         .execute(&mut *tx)
         .await;
-    let _ = sqlx::query("DELETE FROM project_documents WHERE projectId = ?")
+    let _ = sqlx::query("DELETE FROM project_documents WHERE projectId = $1")
         .bind(&id)
         .execute(&mut *tx)
         .await;
@@ -416,7 +416,7 @@ pub async fn delete_project(
 }
 
 pub async fn purge_projects(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
 ) -> Result<Json<ApiResponse<bool>>, (StatusCode, Json<ApiResponse<()>>)> {
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
@@ -433,12 +433,12 @@ pub async fn purge_projects(
 }
 
 pub async fn get_project_docs(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(pid): Path<String>,
 ) -> Result<Json<ApiResponse<Vec<ProjectDocument>>>, (StatusCode, Json<ApiResponse<()>>)> {
     api_response(
         sqlx::query_as::<_, ProjectDocument>(
-            "SELECT * FROM project_documents WHERE projectId = ? ORDER BY addedAt DESC",
+            "SELECT * FROM project_documents WHERE projectId = $1 ORDER BY addedAt DESC",
         )
         .bind(pid)
         .fetch_all(&pool)
@@ -448,7 +448,7 @@ pub async fn get_project_docs(
 }
 
 pub async fn save_project_doc(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Json(payload): Json<CreateDocument>,
 ) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
@@ -456,7 +456,7 @@ pub async fn save_project_doc(
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64;
-    let q = "INSERT INTO project_documents (id, projectId, name, category, filePath, fileType, addedAt) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    let q = "INSERT INTO project_documents (id, projectId, name, category, filePath, fileType, addedAt) VALUES ($1, $2, $3, $4, $5, $6, $7)";
     api_response(
         sqlx::query(q)
             .bind(&id)
@@ -474,11 +474,11 @@ pub async fn save_project_doc(
 }
 
 pub async fn delete_project_doc(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<bool>>, (StatusCode, Json<ApiResponse<()>>)> {
     api_response(
-        sqlx::query("DELETE FROM project_documents WHERE id = ?")
+        sqlx::query("DELETE FROM project_documents WHERE id = $1")
             .bind(id)
             .execute(&pool)
             .await

@@ -7,7 +7,7 @@ use axum::{
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, SqlitePool};
+use sqlx::{FromRow, PgPool};
 
 #[derive(Serialize, Deserialize, FromRow, Clone)]
 pub struct Staff {
@@ -27,7 +27,7 @@ pub struct Staff {
 }
 
 pub async fn get_staff(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
 ) -> Result<Json<ApiResponse<Vec<Staff>>>, (StatusCode, Json<ApiResponse<()>>)> {
     let result = sqlx::query_as::<_, Staff>("SELECT * FROM org_staff")
         .fetch_all(&pool)
@@ -37,7 +37,7 @@ pub async fn get_staff(
 }
 
 pub async fn save_staff(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Json(payload): Json<Staff>,
 ) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
     let mut final_password = payload.password.clone();
@@ -61,19 +61,19 @@ pub async fn save_staff(
 
     let query = "
         INSERT INTO org_staff (id, name, designation, department, status, email, phone, createdAt, username, password, role, accessLevel, globalPermissions)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT(id) DO UPDATE SET
-            name = excluded.name,
-            designation = excluded.designation,
-            department = excluded.department,
-            status = excluded.status,
-            email = excluded.email,
-            phone = excluded.phone,
-            username = excluded.username,
-            password = excluded.password,
-            role = excluded.role,
-            accessLevel = excluded.accessLevel,
-            globalPermissions = excluded.globalPermissions
+            name = EXCLUDED.name,
+            designation = EXCLUDED.designation,
+            department = EXCLUDED.department,
+            status = EXCLUDED.status,
+            email = EXCLUDED.email,
+            phone = EXCLUDED.phone,
+            username = EXCLUDED.username,
+            password = EXCLUDED.password,
+            role = EXCLUDED.role,
+            accessLevel = EXCLUDED.accessLevel,
+            globalPermissions = EXCLUDED.globalPermissions
     ";
 
     let result = sqlx::query(query)
@@ -99,10 +99,10 @@ pub async fn save_staff(
 }
 
 pub async fn delete_staff(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let result = sqlx::query("DELETE FROM org_staff WHERE id = ?")
+    let result = sqlx::query("DELETE FROM org_staff WHERE id = $1")
         .bind(&id)
         .execute(&pool)
         .await
@@ -131,7 +131,7 @@ pub struct WorkLog {
 }
 
 pub async fn get_worklogs(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
 ) -> Result<Json<ApiResponse<Vec<WorkLog>>>, (StatusCode, Json<ApiResponse<()>>)> {
     let result = sqlx::query_as::<_, WorkLog>("SELECT * FROM staff_work_logs")
         .fetch_all(&pool)
@@ -141,12 +141,12 @@ pub async fn get_worklogs(
 }
 
 pub async fn save_worklog(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Json(payload): Json<WorkLog>,
 ) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
     let query = "
         INSERT INTO staff_work_logs (id, date, staffId, slNo, projectId, details, remarks, status, createdAt, duration_minutes, work_category)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     ";
 
     let result = sqlx::query(query)
@@ -170,16 +170,16 @@ pub async fn save_worklog(
 }
 
 pub async fn update_worklog(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(id): Path<String>,
     Json(payload): Json<WorkLog>,
 ) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
     let query = "
         UPDATE staff_work_logs SET
-            date = ?, staffId = ?, slNo = ?, projectId = ?, 
-            details = ?, remarks = ?, status = ?, 
-            duration_minutes = ?, work_category = ?
-        WHERE id = ?
+            date = $1, staffId = $2, slNo = $3, projectId = $4, 
+            details = $5, remarks = $6, status = $7, 
+            duration_minutes = $8, work_category = $9
+        WHERE id = $10
     ";
 
     let result = sqlx::query(query)
@@ -202,10 +202,10 @@ pub async fn update_worklog(
 }
 
 pub async fn delete_worklog(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let result = sqlx::query("DELETE FROM staff_work_logs WHERE id = ?")
+    let result = sqlx::query("DELETE FROM staff_work_logs WHERE id = $1")
         .bind(&id)
         .execute(&pool)
         .await
@@ -215,17 +215,17 @@ pub async fn delete_worklog(
 }
 
 pub async fn get_project_man_hours(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(project_id): Path<String>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, (StatusCode, Json<ApiResponse<()>>)> {
     let query = "
         SELECT work_category, SUM(duration_minutes) as total_mins
         FROM staff_work_logs
-        WHERE projectId = ?
+        WHERE projectId = $1
         GROUP BY work_category
     ";
 
-    let rows = sqlx::query_as::<_, (String, i32)>(query)
+    let rows = sqlx::query_as::<_, (String, i64)>(query)
         .bind(project_id)
         .fetch_all(&pool)
         .await;

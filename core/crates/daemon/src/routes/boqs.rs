@@ -6,7 +6,7 @@ use axum::{
 };
 use serde::Deserialize;
 use shared::{MasterBoq, ProjectBoq};
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 #[derive(Deserialize)]
 pub struct CreateProjectBoq {
@@ -90,11 +90,11 @@ pub struct MasterBoqPayload {
 }
 
 pub async fn get_project_boqs(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(pid): Path<String>,
 ) -> Result<Json<ApiResponse<Vec<ProjectBoq>>>, (StatusCode, Json<ApiResponse<()>>)> {
     api_response(
-        sqlx::query_as::<_, ProjectBoq>("SELECT * FROM project_boq WHERE projectId = ?")
+        sqlx::query_as::<_, ProjectBoq>("SELECT * FROM project_boq WHERE projectId = $1")
             .bind(pid)
             .fetch_all(&pool)
             .await
@@ -103,11 +103,11 @@ pub async fn get_project_boqs(
 }
 
 pub async fn add_project_boq(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Json(payload): Json<CreateProjectBoq>,
 ) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
     let id = uuid::Uuid::new_v4().to_string();
-    let q = "INSERT INTO project_boq (id, projectId, masterBoqId, slNo, isCustom, itemCode, description, unit, rate, qty, formulaStr, measurements, phase, lockedRate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    let q = "INSERT INTO project_boq (id, projectId, masterBoqId, slNo, isCustom, itemCode, description, unit, rate, qty, formulaStr, measurements, phase, lockedRate) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)";
     api_response(
         sqlx::query(q)
             .bind(&id)
@@ -132,7 +132,7 @@ pub async fn add_project_boq(
 }
 
 pub async fn update_project_boq(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(id): Path<String>,
     Json(payload): Json<std::collections::HashMap<String, serde_json::Value>>,
 ) -> Result<Json<ApiResponse<bool>>, (StatusCode, Json<ApiResponse<()>>)> {
@@ -155,12 +155,14 @@ pub async fn update_project_boq(
 
     let mut sets: Vec<String> = Vec::new();
     let mut values: Vec<String> = Vec::new();
+    let mut param_idx = 1;
 
     for (key, val) in &payload {
         if !allowed.contains(&key.as_str()) {
             continue;
         }
-        sets.push(format!("{} = ?", key));
+        sets.push(format!("{} = ${}", key, param_idx));
+        param_idx += 1;
         match val {
             serde_json::Value::Null => values.push("__NULL__".to_string()),
             serde_json::Value::Bool(b) => {
@@ -177,13 +179,13 @@ pub async fn update_project_boq(
         return api_response(Ok(true));
     }
 
-    let q = format!("UPDATE project_boq SET {} WHERE id = ?", sets.join(", "));
+    let q = format!("UPDATE project_boq SET {} WHERE id = ${}", sets.join(", "), param_idx);
     let mut query = sqlx::query(&q);
     for val in &values {
         if val == "__NULL__" {
             query = query.bind(None::<String>);
         } else {
-            query = query.bind(val.as_str());
+            query = query.bind(val.clone());
         }
     }
     api_response(
@@ -197,11 +199,11 @@ pub async fn update_project_boq(
 }
 
 pub async fn delete_project_boq(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<bool>>, (StatusCode, Json<ApiResponse<()>>)> {
     api_response(
-        sqlx::query("DELETE FROM project_boq WHERE id = ?")
+        sqlx::query("DELETE FROM project_boq WHERE id = $1")
             .bind(id)
             .execute(&pool)
             .await
@@ -211,7 +213,7 @@ pub async fn delete_project_boq(
 }
 
 pub async fn bulk_put_project_boqs(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Json(payload): Json<BulkBoqPayload>,
 ) -> Result<Json<ApiResponse<bool>>, (StatusCode, Json<ApiResponse<()>>)> {
     let mut tx = match pool.begin().await {
@@ -219,7 +221,7 @@ pub async fn bulk_put_project_boqs(
         Err(e) => return api_response(Err(e.to_string())),
     };
     for item in payload.items {
-        let _ = sqlx::query("UPDATE project_boq SET lockedRate = ? WHERE id = ?")
+        let _ = sqlx::query("UPDATE project_boq SET lockedRate = $1 WHERE id = $2")
             .bind(item.locked_rate)
             .bind(item.id)
             .execute(&mut *tx)
@@ -229,7 +231,7 @@ pub async fn bulk_put_project_boqs(
 }
 
 pub async fn get_master_boqs(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
 ) -> Result<Json<ApiResponse<Vec<MasterBoq>>>, (StatusCode, Json<ApiResponse<()>>)> {
     api_response(
         sqlx::query_as::<_, MasterBoq>("SELECT * FROM master_boq")
@@ -240,7 +242,7 @@ pub async fn get_master_boqs(
 }
 
 pub async fn save_master_boq(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Json(data): Json<SaveMasterBoq>,
 ) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
     let p = data.payload;
@@ -248,7 +250,7 @@ pub async fn save_master_boq(
     // 1. If we have an ID and we are NOT saving as new, do a standard UPDATE.
     if let Some(id) = &data.id {
         if !data.is_new {
-            return api_response(sqlx::query("UPDATE master_boq SET itemCode=?, description=?, unit=?, overhead=?, profit=?, components=? WHERE id=?")
+            return api_response(sqlx::query("UPDATE master_boq SET itemCode=$1, description=$2, unit=$3, overhead=$4, profit=$5, components=$6 WHERE id=$7")
                 .bind(&p.item_code).bind(&p.description).bind(&p.unit).bind(p.overhead).bind(p.profit).bind(p.components.unwrap_or_else(|| "[]".into())).bind(id)
                 .execute(&pool).await.map(|_| id.clone()).map_err(|e| e.to_string()));
         }
@@ -261,17 +263,17 @@ pub async fn save_master_boq(
         data.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
     };
 
-    api_response(sqlx::query("INSERT INTO master_boq (id, itemCode, description, unit, overhead, profit, components) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    api_response(sqlx::query("INSERT INTO master_boq (id, itemCode, description, unit, overhead, profit, components) VALUES ($1, $2, $3, $4, $5, $6, $7)")
         .bind(&insert_id).bind(&p.item_code).bind(&p.description).bind(&p.unit).bind(p.overhead).bind(p.profit).bind(p.components.unwrap_or_else(|| "[]".into()))
         .execute(&pool).await.map(|_| insert_id).map_err(|e| e.to_string()))
 }
 
 pub async fn delete_master_boq(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<bool>>, (StatusCode, Json<ApiResponse<()>>)> {
     api_response(
-        sqlx::query("DELETE FROM master_boq WHERE id = ?")
+        sqlx::query("DELETE FROM master_boq WHERE id = $1")
             .bind(id)
             .execute(&pool)
             .await
