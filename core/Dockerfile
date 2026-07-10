@@ -8,7 +8,7 @@ WORKDIR /app
 COPY . .
 
 # Build the daemon crate in release mode
-RUN cargo build --release -p daemon
+RUN cargo build --release -p openprix
 
 # Stage 2: Create a minimal runtime image
 FROM debian:bookworm-slim
@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y libssl3 ca-certificates && rm -rf /var/
 WORKDIR /app
 
 # Copy the compiled binary from the builder stage
-COPY --from=builder /app/target/release/daemon /app/daemon
+COPY --from=builder /app/target/release/openprix /app/openprix
 
 # Expose the port your backend runs on (Default 8000/8080)
 EXPOSE 8000
@@ -30,4 +30,4 @@ ENV HOST=0.0.0.0
 ENV PORT=8000
 
 # Run the binary
-CMD ["./daemon"]
+CMD ["./openprix"]
