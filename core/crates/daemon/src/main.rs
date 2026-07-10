@@ -68,21 +68,32 @@ pub fn get_openprix_dir() -> std::path::PathBuf {
 async fn init_db(pool: &PgPool) -> Result<(), Box<dyn std::error::Error>> {
     let schema = "
         CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT);
-        CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT, code TEXT, clientName TEXT, status TEXT, region TEXT, projectLead TEXT, siteSupervisor TEXT, pmc TEXT, architect TEXT, structuralEngineer TEXT, isPriceLocked INTEGER, dailyLogs TEXT, actualResources TEXT, ganttTasks TEXT, subcontractors TEXT, phaseAssignments TEXT, createdAt INTEGER, raBills TEXT, purchaseOrders TEXT, materialRequests TEXT, grns TEXT, type TEXT, location TEXT, isScaffolded INTEGER, scaffoldPath TEXT, isManuallyLinked INTEGER, dailySchedules TEXT, resourceTrackingMode TEXT, assignedStaff TEXT);
-        CREATE TABLE IF NOT EXISTS project_boq (id TEXT PRIMARY KEY, projectId TEXT, masterBoqId TEXT, slNo INTEGER, isCustom INTEGER, itemCode TEXT, description TEXT, unit TEXT, rate REAL, formulaStr TEXT, qty REAL, measurements TEXT, phase TEXT, lockedRate REAL);
-        CREATE TABLE IF NOT EXISTS master_boq (id TEXT PRIMARY KEY, itemCode TEXT, description TEXT, unit TEXT, overhead REAL, profit REAL, components TEXT);
+        CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT, code TEXT, clientName TEXT, status TEXT, region TEXT, projectLead TEXT, siteSupervisor TEXT, pmc TEXT, architect TEXT, structuralEngineer TEXT, isPriceLocked BIGINT, dailyLogs TEXT, actualResources TEXT, ganttTasks TEXT, subcontractors TEXT, phaseAssignments TEXT, createdAt BIGINT, raBills TEXT, purchaseOrders TEXT, materialRequests TEXT, grns TEXT, type TEXT, location TEXT, isScaffolded BIGINT, scaffoldPath TEXT, isManuallyLinked BIGINT, dailySchedules TEXT, resourceTrackingMode TEXT, assignedStaff TEXT);
+        CREATE TABLE IF NOT EXISTS project_boq (id TEXT PRIMARY KEY, projectId TEXT, masterBoqId TEXT, slNo BIGINT, isCustom BIGINT, itemCode TEXT, description TEXT, unit TEXT, rate DOUBLE PRECISION, formulaStr TEXT, qty DOUBLE PRECISION, measurements TEXT, phase TEXT, lockedRate DOUBLE PRECISION);
+        CREATE TABLE IF NOT EXISTS master_boq (id TEXT PRIMARY KEY, itemCode TEXT, description TEXT, unit TEXT, overhead DOUBLE PRECISION, profit DOUBLE PRECISION, components TEXT);
         CREATE TABLE IF NOT EXISTS resources (id TEXT PRIMARY KEY, code TEXT, description TEXT, unit TEXT, rates TEXT, rateHistory TEXT);
         CREATE TABLE IF NOT EXISTS regions (id TEXT PRIMARY KEY, name TEXT);
-        CREATE TABLE IF NOT EXISTS crm_contacts (id TEXT PRIMARY KEY, name TEXT, company TEXT, type TEXT, status TEXT, email TEXT, phone TEXT, createdAt INTEGER);
-        CREATE TABLE IF NOT EXISTS org_staff (id TEXT PRIMARY KEY, name TEXT, designation TEXT, department TEXT, status TEXT, email TEXT, phone TEXT, createdAt INTEGER, username TEXT, password TEXT, role TEXT, accessLevel INTEGER, globalPermissions TEXT);
-        CREATE TABLE IF NOT EXISTS staff_work_logs (id TEXT PRIMARY KEY, date TEXT, staffId TEXT, slNo INTEGER, projectId TEXT, details TEXT, remarks TEXT, status TEXT, createdAt INTEGER, duration_minutes INTEGER, work_category TEXT);
-        CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, projectId TEXT, senderId TEXT, content TEXT, replyToId TEXT, createdAt INTEGER);
-        CREATE TABLE IF NOT EXISTS private_messages (id TEXT PRIMARY KEY, senderId TEXT, receiverId TEXT, content TEXT, replyToId TEXT, createdAt INTEGER);
-        CREATE TABLE IF NOT EXISTS project_documents (id TEXT PRIMARY KEY, projectId TEXT, name TEXT, category TEXT, filePath TEXT, fileType TEXT, addedAt INTEGER);
+        CREATE TABLE IF NOT EXISTS crm_contacts (id TEXT PRIMARY KEY, name TEXT, company TEXT, type TEXT, status TEXT, email TEXT, phone TEXT, createdAt BIGINT);
+        CREATE TABLE IF NOT EXISTS org_staff (id TEXT PRIMARY KEY, name TEXT, designation TEXT, department TEXT, status TEXT, email TEXT, phone TEXT, createdAt BIGINT, username TEXT, password TEXT, role TEXT, accessLevel INTEGER, globalPermissions TEXT);
+        CREATE TABLE IF NOT EXISTS staff_work_logs (id TEXT PRIMARY KEY, date TEXT, staffId TEXT, slNo BIGINT, projectId TEXT, details TEXT, remarks TEXT, status TEXT, createdAt BIGINT, duration_minutes INTEGER, work_category TEXT);
+        CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, projectId TEXT, senderId TEXT, content TEXT, replyToId TEXT, createdAt BIGINT);
+        CREATE TABLE IF NOT EXISTS private_messages (id TEXT PRIMARY KEY, senderId TEXT, receiverId TEXT, content TEXT, replyToId TEXT, createdAt BIGINT);
+        CREATE TABLE IF NOT EXISTS project_documents (id TEXT PRIMARY KEY, projectId TEXT, name TEXT, category TEXT, filePath TEXT, fileType TEXT, addedAt BIGINT);
+        CREATE INDEX IF NOT EXISTS idx_project_boq_project_id ON project_boq (projectId);
+        CREATE INDEX IF NOT EXISTS idx_staff_work_logs_project_id ON staff_work_logs (projectId);
+        CREATE INDEX IF NOT EXISTS idx_staff_work_logs_staff_id ON staff_work_logs (staffId);
+        CREATE INDEX IF NOT EXISTS idx_messages_project_id ON messages (projectId);
+        CREATE INDEX IF NOT EXISTS idx_private_messages_sender_id ON private_messages (senderId);
+        CREATE INDEX IF NOT EXISTS idx_private_messages_receiver_id ON private_messages (receiverId);
+        CREATE INDEX IF NOT EXISTS idx_project_documents_project_id ON project_documents (projectId);
     ";
 
-    sqlx::query(schema).execute(pool).await?;
-
+    for stmt in schema.split(';') {
+        let stmt = stmt.trim();
+        if !stmt.is_empty() {
+            sqlx::query(stmt).execute(pool).await?;
+        }
+    }
     let _ =
         sqlx::query("ALTER TABLE staff_work_logs ADD COLUMN duration_minutes INTEGER DEFAULT 0;")
             .execute(pool)
@@ -328,6 +339,9 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     let config = serde_json::json!({ "port": actual_port });
     let _ = fs::write(&config_path, config.to_string());
 
+    // Load environment variables from .env file if it exists
+    dotenvy::dotenv().ok();
+
     // Postgres connection handling
     let db_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/openprix".to_string());
@@ -502,6 +516,7 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         .merge(protected_routes)
         .layer(DefaultBodyLimit::disable())
         .layer(cors)
+        .layer(tower_http::compression::CompressionLayer::new())
         .with_state(pool)
         .fallback(static_handler);
 

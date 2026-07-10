@@ -21,48 +21,48 @@ pub struct Project {
     pub id: String,
     pub name: Option<String>,
     pub code: Option<String>,
-    #[sqlx(rename = "clientName")]
+    #[sqlx(rename = "clientname")]
     #[serde(rename = "clientName")]
     pub client_name: Option<String>,
     pub status: Option<String>,
     pub region: Option<String>,
-    #[sqlx(rename = "projectLead")]
+    #[sqlx(rename = "projectlead")]
     #[serde(rename = "projectLead")]
     pub project_lead: Option<String>,
-    #[sqlx(rename = "siteSupervisor")]
+    #[sqlx(rename = "sitesupervisor")]
     #[serde(rename = "siteSupervisor")]
     pub site_supervisor: Option<String>,
     pub pmc: Option<String>,
     pub architect: Option<String>,
-    #[sqlx(rename = "structuralEngineer")]
+    #[sqlx(rename = "structuralengineer")]
     #[serde(rename = "structuralEngineer")]
     pub structural_engineer: Option<String>,
-    #[sqlx(rename = "isPriceLocked")]
+    #[sqlx(rename = "ispricelocked")]
     #[serde(rename = "isPriceLocked")]
     pub is_price_locked: Option<i64>,
-    #[sqlx(rename = "dailyLogs")]
+    #[sqlx(rename = "dailylogs")]
     #[serde(rename = "dailyLogs")]
     pub daily_logs: Option<String>,
-    #[sqlx(rename = "actualResources")]
+    #[sqlx(rename = "actualresources")]
     #[serde(rename = "actualResources")]
     pub actual_resources: Option<String>,
-    #[sqlx(rename = "ganttTasks")]
+    #[sqlx(rename = "gantttasks")]
     #[serde(rename = "ganttTasks")]
     pub gantt_tasks: Option<String>,
     pub subcontractors: Option<String>,
-    #[sqlx(rename = "phaseAssignments")]
+    #[sqlx(rename = "phaseassignments")]
     #[serde(rename = "phaseAssignments")]
     pub phase_assignments: Option<String>,
-    #[sqlx(rename = "createdAt")]
+    #[sqlx(rename = "createdat")]
     #[serde(rename = "createdAt")]
     pub created_at: Option<i64>,
-    #[sqlx(rename = "raBills")]
+    #[sqlx(rename = "rabills")]
     #[serde(rename = "raBills")]
     pub ra_bills: Option<String>,
-    #[sqlx(rename = "purchaseOrders")]
+    #[sqlx(rename = "purchaseorders")]
     #[serde(rename = "purchaseOrders")]
     pub purchase_orders: Option<String>,
-    #[sqlx(rename = "materialRequests")]
+    #[sqlx(rename = "materialrequests")]
     #[serde(rename = "materialRequests")]
     pub material_requests: Option<String>,
     pub grns: Option<String>,
@@ -70,22 +70,22 @@ pub struct Project {
     #[serde(rename = "type")]
     pub project_type: Option<String>,
     pub location: Option<String>,
-    #[sqlx(rename = "isScaffolded")]
+    #[sqlx(rename = "isscaffolded")]
     #[serde(rename = "isScaffolded")]
     pub is_scaffolded: Option<i64>,
-    #[sqlx(rename = "scaffoldPath")]
+    #[sqlx(rename = "scaffoldpath")]
     #[serde(rename = "scaffoldPath")]
     pub scaffold_path: Option<String>,
-    #[sqlx(rename = "isManuallyLinked")]
+    #[sqlx(rename = "ismanuallylinked")]
     #[serde(rename = "isManuallyLinked")]
     pub is_manually_linked: Option<i64>,
-    #[sqlx(rename = "dailySchedules")]
+    #[sqlx(rename = "dailyschedules")]
     #[serde(rename = "dailySchedules")]
     pub daily_schedules: Option<String>,
-    #[sqlx(rename = "resourceTrackingMode")]
+    #[sqlx(rename = "resourcetrackingmode")]
     #[serde(rename = "resourceTrackingMode")]
     pub resource_tracking_mode: Option<String>,
-    #[sqlx(rename = "assignedStaff")]
+    #[sqlx(rename = "assignedstaff")]
     #[serde(rename = "assignedStaff")]
     pub assigned_staff: Option<String>,
 }
@@ -99,13 +99,13 @@ pub struct Staff {
     pub status: Option<String>,
     pub email: Option<String>,
     pub phone: Option<String>,
-    #[sqlx(rename = "createdAt")]
+    #[sqlx(rename = "createdat")]
     #[serde(rename = "createdAt")]
     pub created_at: Option<i64>,
     pub username: Option<String>,
     pub password: Option<String>,
     pub role: Option<String>,
-    #[sqlx(rename = "accessLevel")]
+    #[sqlx(rename = "accesslevel")]
     #[serde(rename = "accessLevel")]
     pub access_level: Option<i32>,
 }
@@ -113,17 +113,17 @@ pub struct Staff {
 #[derive(Debug, Serialize, Deserialize, Clone, FromRow)]
 pub struct Message {
     pub id: String,
-    #[sqlx(rename = "projectId")]
+    #[sqlx(rename = "projectid")]
     #[serde(rename = "projectId")]
     pub project_id: Option<String>,
-    #[sqlx(rename = "senderId")]
+    #[sqlx(rename = "senderid")]
     #[serde(rename = "senderId")]
     pub sender_id: Option<String>,
     pub content: Option<String>,
-    #[sqlx(rename = "replyToId")]
+    #[sqlx(rename = "replytoid")]
     #[serde(rename = "replyToId")]
     pub reply_to_id: Option<String>,
-    #[sqlx(rename = "createdAt")]
+    #[sqlx(rename = "createdat")]
     #[serde(rename = "createdAt")]
     pub created_at: Option<i64>,
 }
@@ -131,17 +131,17 @@ pub struct Message {
 #[derive(Debug, Serialize, Deserialize, Clone, FromRow)]
 pub struct PrivateMessage {
     pub id: String,
-    #[sqlx(rename = "senderId")]
+    #[sqlx(rename = "senderid")]
     #[serde(rename = "senderId")]
     pub sender_id: Option<String>,
-    #[sqlx(rename = "receiverId")]
+    #[sqlx(rename = "receiverid")]
     #[serde(rename = "receiverId")]
     pub receiver_id: Option<String>,
     pub content: Option<String>,
-    #[sqlx(rename = "replyToId")]
+    #[sqlx(rename = "replytoid")]
     #[serde(rename = "replyToId")]
     pub reply_to_id: Option<String>,
-    #[sqlx(rename = "createdAt")]
+    #[sqlx(rename = "createdat")]
     #[serde(rename = "createdAt")]
     pub created_at: Option<i64>,
 }
@@ -149,18 +149,18 @@ pub struct PrivateMessage {
 #[derive(Debug, Serialize, Deserialize, Clone, FromRow)]
 pub struct ProjectDocument {
     pub id: String,
-    #[sqlx(rename = "projectId")]
+    #[sqlx(rename = "projectid")]
     #[serde(rename = "projectId")]
     pub project_id: Option<String>,
     pub name: Option<String>,
     pub category: Option<String>,
-    #[sqlx(rename = "filePath")]
+    #[sqlx(rename = "filepath")]
     #[serde(rename = "filePath")]
     pub file_path: Option<String>,
-    #[sqlx(rename = "fileType")]
+    #[sqlx(rename = "filetype")]
     #[serde(rename = "fileType")]
     pub file_type: Option<String>,
-    #[sqlx(rename = "addedAt")]
+    #[sqlx(rename = "addedat")]
     #[serde(rename = "addedAt")]
     pub added_at: Option<i64>,
 }
@@ -168,31 +168,31 @@ pub struct ProjectDocument {
 #[derive(Debug, Serialize, Deserialize, Clone, FromRow)]
 pub struct ProjectBoq {
     pub id: String,
-    #[sqlx(rename = "projectId")]
+    #[sqlx(rename = "projectid")]
     #[serde(rename = "projectId")]
     pub project_id: Option<String>,
-    #[sqlx(rename = "masterBoqId")]
+    #[sqlx(rename = "masterboqid")]
     #[serde(rename = "masterBoqId")]
     pub master_boq_id: Option<String>,
-    #[sqlx(rename = "slNo")]
+    #[sqlx(rename = "slno")]
     #[serde(rename = "slNo")]
     pub sl_no: Option<i64>,
-    #[sqlx(rename = "isCustom")]
+    #[sqlx(rename = "iscustom")]
     #[serde(rename = "isCustom")]
     pub is_custom: Option<i64>,
-    #[sqlx(rename = "itemCode")]
+    #[sqlx(rename = "itemcode")]
     #[serde(rename = "itemCode")]
     pub item_code: Option<String>,
     pub description: Option<String>,
     pub unit: Option<String>,
     pub rate: Option<f64>,
-    #[sqlx(rename = "formulaStr")]
+    #[sqlx(rename = "formulastr")]
     #[serde(rename = "formulaStr")]
     pub formula_str: Option<String>,
     pub qty: Option<f64>,
     pub measurements: Option<String>,
     pub phase: Option<String>,
-    #[sqlx(rename = "lockedRate")]
+    #[sqlx(rename = "lockedrate")]
     #[serde(rename = "lockedRate")]
     pub locked_rate: Option<f64>,
 }
@@ -211,7 +211,7 @@ pub struct Resource {
     pub description: Option<String>,
     pub unit: Option<String>,
     pub rates: Option<String>,
-    #[sqlx(rename = "rateHistory")]
+    #[sqlx(rename = "ratehistory")]
     #[serde(rename = "rateHistory")]
     pub rate_history: Option<String>,
 }
@@ -219,7 +219,7 @@ pub struct Resource {
 #[derive(Debug, Serialize, Deserialize, Clone, FromRow)]
 pub struct MasterBoq {
     pub id: String,
-    #[sqlx(rename = "itemCode")]
+    #[sqlx(rename = "itemcode")]
     #[serde(rename = "itemCode")]
     pub item_code: Option<String>,
     pub description: Option<String>,
@@ -240,7 +240,7 @@ pub struct CrmContact {
     pub status: Option<String>,
     pub email: Option<String>,
     pub phone: Option<String>,
-    #[sqlx(rename = "createdAt")]
+    #[sqlx(rename = "createdat")]
     #[serde(rename = "createdAt")]
     pub created_at: Option<i64>,
 }
@@ -249,13 +249,13 @@ pub struct CrmContact {
 pub struct WorkLog {
     pub id: String,
     pub date: Option<String>,
-    #[sqlx(rename = "staffId")]
+    #[sqlx(rename = "staffid")]
     #[serde(rename = "staffId")]
     pub staff_id: Option<String>,
-    #[sqlx(rename = "slNo")]
+    #[sqlx(rename = "slno")]
     #[serde(rename = "slNo")]
     pub sl_no: Option<i64>,
-    #[sqlx(rename = "projectId")]
+    #[sqlx(rename = "projectid")]
     #[serde(rename = "projectId")]
     pub project_id: Option<String>,
     pub details: Option<String>,
@@ -263,7 +263,7 @@ pub struct WorkLog {
     pub status: Option<String>,
     pub duration_minutes: i32,
     pub work_category: String,
-    #[sqlx(rename = "createdAt")]
+    #[sqlx(rename = "createdat")]
     #[serde(rename = "createdAt")]
     pub created_at: Option<i64>,
 }

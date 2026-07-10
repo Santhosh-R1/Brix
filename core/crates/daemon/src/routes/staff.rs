@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
 
 #[derive(Serialize, Deserialize, FromRow, Clone)]
+#[sqlx(rename_all = "lowercase")]
 pub struct Staff {
     pub id: String,
     pub name: String,
@@ -114,6 +115,7 @@ pub async fn delete_staff(
 // 🔥 Updated WorkLog Struct for Man-Hour Tracking
 #[derive(Serialize, Deserialize, FromRow, Clone)]
 #[serde(rename_all = "camelCase")]
+#[sqlx(rename_all = "lowercase")]
 pub struct WorkLog {
     pub id: String,
     pub date: Option<String>,

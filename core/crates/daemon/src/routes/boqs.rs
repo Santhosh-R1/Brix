@@ -161,7 +161,12 @@ pub async fn update_project_boq(
         if !allowed.contains(&key.as_str()) {
             continue;
         }
-        sets.push(format!("{} = ${}", key, param_idx));
+        let cast = match key.as_str() {
+            "slNo" | "isCustom" => "::bigint",
+            "rate" | "qty" | "lockedRate" => "::double precision",
+            _ => "",
+        };
+        sets.push(format!("{} = CAST(${} AS TEXT){}", key, param_idx, cast));
         param_idx += 1;
         match val {
             serde_json::Value::Null => values.push("__NULL__".to_string()),

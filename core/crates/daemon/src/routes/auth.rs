@@ -22,14 +22,14 @@ pub struct UserData {
     pub id: String,
     pub name: String,
     pub role: String,
-    pub access_level: i64,
+    pub access_level: i32,
     pub global_permissions: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
     pub sub: String,
-    pub access_level: i64,
+    pub access_level: i32,
     pub exp: usize,
 }
 
@@ -40,9 +40,9 @@ struct DbUser {
     name: Option<String>,
     password: Option<String>,
     role: Option<String>,
-    #[sqlx(rename = "accessLevel")]
-    access_level: Option<i64>,
-    #[sqlx(rename = "globalPermissions")]
+    #[sqlx(rename = "accesslevel")]
+    access_level: Option<i32>,
+    #[sqlx(rename = "globalpermissions")]
     global_permissions: Option<String>,
 }
 

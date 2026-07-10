@@ -61,22 +61,29 @@ pub async fn bulk_save_resources(State(pool): State<PgPool>, Json(payload): Json
         Ok(tx) => tx,
         Err(e) => return api_response(Err(e.to_string())),
     };
-    for item in payload {
-        let id = item.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        let q = "INSERT INTO resources (id, code, description, unit, rates, rateHistory) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO UPDATE SET code = EXCLUDED.code, description = EXCLUDED.description, unit = EXCLUDED.unit, rates = EXCLUDED.rates, rateHistory = EXCLUDED.rateHistory";
-        let res = sqlx::query(q)
-            .bind(&id)
-            .bind(item.code)
-            .bind(item.description)
-            .bind(item.unit)
-            .bind(item.rates.unwrap_or_else(|| "{}".into()))
-            .bind(item.rate_history.unwrap_or_else(|| "[]".into()))
-            .execute(&mut *tx)
-            .await;
-        if let Err(e) = res {
+
+    for chunk in payload.chunks(1000) {
+        let mut query_builder = sqlx::QueryBuilder::new(
+            "INSERT INTO resources (id, code, description, unit, rates, rateHistory) "
+        );
+
+        query_builder.push_values(chunk, |mut b, item| {
+            let id = item.id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            b.push_bind(id)
+             .push_bind(item.code.clone())
+             .push_bind(item.description.clone())
+             .push_bind(item.unit.clone())
+             .push_bind(item.rates.clone().unwrap_or_else(|| "{}".into()))
+             .push_bind(item.rate_history.clone().unwrap_or_else(|| "[]".into()));
+        });
+
+        query_builder.push(" ON CONFLICT (id) DO UPDATE SET code = EXCLUDED.code, description = EXCLUDED.description, unit = EXCLUDED.unit, rates = EXCLUDED.rates, rateHistory = EXCLUDED.rateHistory");
+
+        if let Err(e) = query_builder.build().execute(&mut *tx).await {
             let _ = tx.rollback().await;
             return api_response(Err(e.to_string()));
         }
     }
+    
     api_response(tx.commit().await.map(|_| true).map_err(|e| e.to_string()))
 }
