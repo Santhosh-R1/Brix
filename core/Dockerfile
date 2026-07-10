@@ -1,5 +1,5 @@
 # Stage 1: Build the Rust application
-FROM rust:1.75-slim-bookworm as builder
+FROM rust:1-slim-bookworm as builder
 
 # Install necessary build dependencies
 RUN apt-get update && apt-get install -y pkg-config libssl-dev build-essential
