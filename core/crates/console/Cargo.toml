@@ -1,7 +1,7 @@
 [package]
 name = "openprix-tui"
 version = "2.0.0"
-edition = "2024"
+edition = "2021"
 authors = ["GOKUL DC <gokuldc93@gmail.com>"]
 description = "OpenPrix Core: High-performance Engineering ERP & Server Daemon"
 homepage = "https://github.com/gokuldc/openprix"
