@@ -30,4 +30,5 @@ dist-electron
 # Rust build artifacts
 core/target/
 #database
-database.sqlite
+database.sqlite.env
+**/.env
