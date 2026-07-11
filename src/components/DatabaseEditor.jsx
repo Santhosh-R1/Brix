@@ -132,6 +132,47 @@ export default function DatabaseEditor() {
         return <Box p={5} textAlign="center"><Typography sx={{ color: 'error.main', fontFamily: "'JetBrains Mono', monospace" }}>ACCESS_DENIED: No modules permitted.</Typography></Box>;
     }
 
+    const renderSkeleton = () => {
+        if (tab === "viewBoq") {
+            return (
+                <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                        <Skeleton variant="text" width={220} height={40} sx={{ bgcolor: 'rgba(255,255,255,0.05)' }} />
+                        <Box display="flex" gap={2}>
+                            <Skeleton variant="rounded" width={110} height={35} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1 }} />
+                            <Skeleton variant="rounded" width={130} height={35} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1 }} />
+                        </Box>
+                    </Box>
+                    <Box display="flex" gap={2} mb={3} flexWrap="wrap">
+                        <Skeleton variant="rounded" width={180} height={40} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1 }} />
+                        <Skeleton variant="rounded" width={220} height={40} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1 }} />
+                        <Skeleton variant="rounded" width={180} height={40} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1 }} />
+                        <Box flexGrow={1} />
+                        <Skeleton variant="rounded" width={170} height={40} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1 }} />
+                        <Skeleton variant="rounded" width={190} height={40} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1 }} />
+                    </Box>
+                    <Skeleton variant="rounded" height={400} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
+                </Box>
+            );
+        }
+        
+        // Default (resources)
+        return (
+            <Box sx={{ flexGrow: 1 }}>
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                    <Grid item xs={12} md={6}>
+                        <Skeleton variant="rounded" height={120} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <Skeleton variant="rounded" height={120} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
+                    </Grid>
+                </Grid>
+                <Skeleton variant="rounded" height={160} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2, mb: 3 }} />
+                <Skeleton variant="rounded" height={400} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
+            </Box>
+        );
+    };
+
     return (
         <Box sx={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
             {/* SIDEBAR */}
@@ -182,18 +223,7 @@ export default function DatabaseEditor() {
                 </Box>
 
                 {isLoading ? (
-                    <Box sx={{ flexGrow: 1 }}>
-                        <Grid container spacing={2} sx={{ mb: 3 }}>
-                            <Grid item xs={12} md={6}>
-                                <Skeleton variant="rounded" height={120} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-                                <Skeleton variant="rounded" height={120} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
-                            </Grid>
-                        </Grid>
-                        <Skeleton variant="rounded" height={160} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2, mb: 3 }} />
-                        <Skeleton variant="rounded" height={400} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
-                    </Box>
+                    renderSkeleton()
                 ) : (
                     <Box sx={{ flexGrow: 1 }}>
                         {tab === "resources" && canAccess(2, 'resources') && <ResourcesTab regions={regions} resources={resources} masterBoqs={masterBoqs} loadData={loadData} />}
