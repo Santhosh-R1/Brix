@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import {
     Box, Typography, Paper, Grid, Avatar,
     useTheme, Divider, Chip, Stack, alpha,
-    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, LinearProgress
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, LinearProgress, Skeleton
 } from "@mui/material";
 import {
     PieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReTooltip,
@@ -41,6 +41,7 @@ export default function Home() {
     const [regions, setRegions] = useState([]);
     const [crmContacts, setCrmContacts] = useState([]);
     const [orgStaff, setOrgStaff] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     const loadData = async () => {
         try {
@@ -62,6 +63,8 @@ export default function Home() {
             if (Array.isArray(staffData)) setOrgStaff(staffData);
         } catch (error) {
             console.error("Dashboard Load Error:", error);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -194,7 +197,45 @@ export default function Home() {
                     </Typography>
                 </Box>
 
-                <Typography variant="caption" sx={{ fontFamily: "'JetBrains Mono', monospace", opacity: 0.5, letterSpacing: '2px', display: 'block', mb: 1.5 }}>DATABASE_METRICS</Typography>
+                {isLoading ? (
+                    <>
+                        <Typography variant="caption" sx={{ fontFamily: "'JetBrains Mono', monospace", opacity: 0.5, letterSpacing: '2px', display: 'block', mb: 1.5 }}>DATABASE_METRICS</Typography>
+                        <Grid container spacing={2} sx={{ mb: 4 }}>
+                            {[1, 2, 3, 4, 5, 6].map(i => (
+                                <Grid item xs={6} sm={4} md={2} key={i}>
+                                    <Skeleton variant="rounded" height={70} sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05), borderRadius: 2 }} />
+                                </Grid>
+                            ))}
+                        </Grid>
+
+                        <Grid container spacing={3} sx={{ mb: 4 }}>
+                            {[1, 2, 3].map(i => (
+                                <Grid item xs={12} lg={4} key={i}>
+                                    <Skeleton variant="rounded" height={100} sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05), borderRadius: 3 }} />
+                                </Grid>
+                            ))}
+                        </Grid>
+
+                        <Grid container spacing={3} sx={{ mb: 4 }}>
+                            <Grid item xs={12} lg={4}>
+                                <Skeleton variant="rounded" height={400} sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05), borderRadius: 3 }} />
+                            </Grid>
+                            <Grid item xs={12} lg={5}>
+                                <Skeleton variant="rounded" height={400} sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05), borderRadius: 3 }} />
+                            </Grid>
+                            <Grid item xs={12} lg={3}>
+                                <Skeleton variant="rounded" height={400} sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05), borderRadius: 3 }} />
+                            </Grid>
+                        </Grid>
+                        
+                        <Box sx={{ mb: 4 }}>
+                            <Typography variant="subtitle2" sx={{ fontFamily: "'JetBrains Mono', monospace", mb: 2, opacity: 0.7 }}>ACTIVE_PROJECT_TRACKER</Typography>
+                            <Skeleton variant="rounded" height={200} sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05), borderRadius: 3 }} />
+                        </Box>
+                    </>
+                ) : (
+                    <>
+                        <Typography variant="caption" sx={{ fontFamily: "'JetBrains Mono', monospace", opacity: 0.5, letterSpacing: '2px', display: 'block', mb: 1.5 }}>DATABASE_METRICS</Typography>
                 <Grid container spacing={2} sx={{ mb: 4 }}>
                     <Grid item xs={6} sm={4} md={2}><StatTile title="Resources" value={localMarketResourcesCount} icon={<HandymanIcon fontSize="small" />} color="info" /></Grid>
                     <Grid item xs={6} sm={4} md={2}><StatTile title="Assemblies" value={masterBoqs.length} icon={<AutoStoriesIcon fontSize="small" />} color="success" /></Grid>
@@ -345,6 +386,8 @@ export default function Home() {
                         </Table>
                     </TableContainer>
                 </Box>
+                </>
+                )}
 
             </Box>
         </Box>
