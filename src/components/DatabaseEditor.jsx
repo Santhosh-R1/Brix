@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import {
     Box, Typography, Paper, IconButton, Tooltip,
-    List, ListItem, ListItemButton, ListItemIcon, ListItemText
+    List, ListItem, ListItemButton, ListItemIcon, ListItemText, Skeleton, Grid
 } from "@mui/material";
 
 import MenuIcon from '@mui/icons-material/Menu';
@@ -40,9 +40,11 @@ export default function DatabaseEditor() {
     const SIDEBAR_OPEN_WIDTH = 260;
 
     // 🔥 AUTOMATIC DATA FETCHING
-    const { data: regions = [] } = useRegions();
-    const { data: rawResources = [] } = useResources();
-    const { data: rawMasterBoqs = [] } = useMasterBoqs();
+    const { data: regions = [], isLoading: loadingRegions } = useRegions();
+    const { data: rawResources = [], isLoading: loadingResources } = useResources();
+    const { data: rawMasterBoqs = [], isLoading: loadingBoqs } = useMasterBoqs();
+    
+    const isLoading = loadingRegions || loadingResources || loadingBoqs;
     const deleteMasterBoqMutation = useDeleteMasterBoq();
 
     // 🔥 SAFE PARSING VIA USEMEMO
@@ -179,24 +181,39 @@ export default function DatabaseEditor() {
                     </Box>
                 </Box>
 
-                <Box sx={{ flexGrow: 1 }}>
-                    {tab === "resources" && canAccess(2, 'resources') && <ResourcesTab regions={regions} resources={resources} masterBoqs={masterBoqs} loadData={loadData} />}
-                    
-                    {tab === "viewBoq" && canAccess(2, 'viewBoq') && (
-                        <ViewBoqTab 
-                            masterBoqs={masterBoqs} 
-                            regions={regions} 
-                            resources={resources} 
-                            onEditBoq={handleEditBoq} 
-                            deleteMasterBoq={openDeleteConfirmation} // Trigger Modal instead of Alert
-                            loadData={loadData} 
-                        />
-                    )}
+                {isLoading ? (
+                    <Box sx={{ flexGrow: 1 }}>
+                        <Grid container spacing={2} sx={{ mb: 3 }}>
+                            <Grid item xs={12} md={6}>
+                                <Skeleton variant="rounded" height={120} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
+                            </Grid>
+                            <Grid item xs={12} md={6}>
+                                <Skeleton variant="rounded" height={120} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
+                            </Grid>
+                        </Grid>
+                        <Skeleton variant="rounded" height={160} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2, mb: 3 }} />
+                        <Skeleton variant="rounded" height={400} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
+                    </Box>
+                ) : (
+                    <Box sx={{ flexGrow: 1 }}>
+                        {tab === "resources" && canAccess(2, 'resources') && <ResourcesTab regions={regions} resources={resources} masterBoqs={masterBoqs} loadData={loadData} />}
+                        
+                        {tab === "viewBoq" && canAccess(2, 'viewBoq') && (
+                            <ViewBoqTab 
+                                masterBoqs={masterBoqs} 
+                                regions={regions} 
+                                resources={resources} 
+                                onEditBoq={handleEditBoq} 
+                                deleteMasterBoq={openDeleteConfirmation} // Trigger Modal instead of Alert
+                                loadData={loadData} 
+                            />
+                        )}
 
-                    {tab === "createBoq" && canAccess(3, 'createBoq') && <CreateBoqTab regions={regions} resources={resources} masterBoqs={masterBoqs} loadData={loadData} editingBoq={editingBoq} clearEdit={clearEdit} />}
-                    
-                    {tab === "backup" && canAccess(5, 'backup') && <BackupRestoreTab loadData={loadData} />}
-                </Box>
+                        {tab === "createBoq" && canAccess(3, 'createBoq') && <CreateBoqTab regions={regions} resources={resources} masterBoqs={masterBoqs} loadData={loadData} editingBoq={editingBoq} clearEdit={clearEdit} />}
+                        
+                        {tab === "backup" && canAccess(5, 'backup') && <BackupRestoreTab loadData={loadData} />}
+                    </Box>
+                )}
             </Box>
 
             {/* 🔥 REUSABLE DELETE MODAL */}
