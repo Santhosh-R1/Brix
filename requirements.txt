@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+PyMuPDF
+opencv-python-headless
+shapely
+networkx
+python-multipart
