@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 export default function ConnectPortal({ onConnected }) {
-    const [url, setUrl] = useState('http://127.0.0.1:3000');
+    const [url, setUrl] = useState(import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000');
     const [isConnecting, setIsConnecting] = useState(false);
     const [error, setError] = useState(false);
 
@@ -46,7 +46,7 @@ export default function ConnectPortal({ onConnected }) {
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     style={styles.input}
-                    placeholder="http://127.0.0.1:3000"
+                    placeholder={import.meta.env.VITE_API_URL || "http://127.0.0.1:3000"}
                     onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
                 />
 

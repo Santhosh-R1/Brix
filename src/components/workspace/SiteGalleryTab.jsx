@@ -29,7 +29,7 @@ const SmartMedia = ({ filePath, alt, style, isThumbnail = false }) => {
         const resolveMedia = async () => {
             const token = localStorage.getItem('openprix_token');
             const isDesktop = navigator.userAgent.toLowerCase().includes('electron');
-            const targetUrl = window.api?.os?.getServerUrl ? window.api.os.getServerUrl() : 'http://127.0.0.1:3000';
+            const targetUrl = window.api?.os?.getServerUrl ? window.api.os.getServerUrl() : (import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000');
 
             // 1. Desktop optimization: try base64 first
             if (!isVideo && isDesktop && window.api?.os?.getBase64) {

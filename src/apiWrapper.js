@@ -1,5 +1,5 @@
 // 🔥 The Global Client URL. The user will change this via the Login Screen.
-let SERVER_URL = sessionStorage.getItem('openprix_server_url') || 'http://127.0.0.1:3000';
+let SERVER_URL = sessionStorage.getItem('openprix_server_url') || import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000';
 
 export const setServerUrl = (url) => {
     SERVER_URL = url;

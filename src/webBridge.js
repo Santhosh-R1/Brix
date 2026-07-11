@@ -16,12 +16,12 @@ const isTauri = '__TAURI_INTERNALS__' in window;
 
 const getTargetUrl = () => {
     if (isTauri) {
-        return localStorage.getItem('openprix_last_server') || 'http://127.0.0.1:3000';
+        return localStorage.getItem('openprix_last_server') || import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000';
     }
     if (window.location.port !== '5173') {
         return window.location.origin;
     }
-    return localStorage.getItem('openprix_last_server') || 'http://127.0.0.1:3000';
+    return localStorage.getItem('openprix_last_server') || import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000';
 };
 
 const SERVER_URL = getTargetUrl();

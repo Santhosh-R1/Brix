@@ -166,7 +166,8 @@ export default function VectorPlanEstimator({ onQuantitiesCalculated }) {
                 // Fetch structural corners (vertices) from backend
                 const formData = new FormData();
                 formData.append('file', selectedFile);
-                fetch('http://localhost:8000/extract-vertices/', {
+                const pythonApi = import.meta.env.VITE_PYTHON_API_URL || 'http://localhost:8000';
+                fetch(`${pythonApi}/extract-vertices/`, {
                     method: 'POST',
                     body: formData
                 })
@@ -407,7 +408,7 @@ export default function VectorPlanEstimator({ onQuantitiesCalculated }) {
         formData.append('p2_y_pct', points[1].yPct);
 
         try {
-            const apiUrl = 'http://localhost:8000';
+            const apiUrl = import.meta.env.VITE_PYTHON_API_URL || 'http://localhost:8000';
             const endpoint = isModelEstimator ? 'calculate-model-quantities' : 'calculate-vector-quantities';
             const response = await fetch(`${apiUrl}/${endpoint}/`, {
                 method: 'POST',
@@ -421,7 +422,8 @@ export default function VectorPlanEstimator({ onQuantitiesCalculated }) {
             if (onQuantitiesCalculated) onQuantitiesCalculated(data);
         } catch (error) {
             console.error("Error calculating quantities:", error);
-            alert("Failed to connect to backend estimator at " + (window.location.origin.includes('localhost') ? 'http://localhost:8000' : 'estimation backend'));
+            const fallbackUrl = import.meta.env.VITE_PYTHON_API_URL || 'http://localhost:8000';
+            alert("Failed to connect to backend estimator at " + (window.location.origin.includes('localhost') ? fallbackUrl : 'estimation backend'));
         } finally {
             setLoading(false);
         }
