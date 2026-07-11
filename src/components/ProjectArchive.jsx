@@ -14,6 +14,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { getProjectArchiveStyles } from "./ProjectArchive.styles";
 
 import { useAuth } from "../context/AuthContext";
+import ConfirmDeleteProjectModal from "./ConfirmDeleteProjectModal";
 
 export default function ProjectArchive({ onOpenProject }) {
     const { currentUser, hasClearance } = useAuth();
@@ -27,6 +28,7 @@ export default function ProjectArchive({ onOpenProject }) {
 
     const [importData, setImportData] = useState(null);
     const [importDialogOpen, setImportDialogOpen] = useState(false);
+    const [deleteModal, setDeleteModal] = useState({ open: false, id: null, name: "", code: "" });
 
     const loadData = async () => {
         setIsLoading(true);
@@ -89,12 +91,17 @@ export default function ProjectArchive({ onOpenProject }) {
     const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
     const paginatedProjects = filteredProjects.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
-    const deleteProject = async (id, e) => {
+    const triggerDelete = (id, name, code, e) => {
         e.stopPropagation();
-        if (window.confirm("CRITICAL: Delete this project and all associated data?")) {
-            await window.api.db.deleteProject(id);
+        setDeleteModal({ open: true, id, name, code });
+    };
+
+    const confirmDelete = async () => {
+        if (deleteModal.id) {
+            await window.api.db.deleteProject(deleteModal.id);
             loadData();
         }
+        setDeleteModal({ open: false, id: null, name: "", code: "" });
     };
 
     const handleExport = async () => {
@@ -188,7 +195,7 @@ export default function ProjectArchive({ onOpenProject }) {
                                     </Box>
                                     <Box display="flex" justifyContent="space-between" alignItems="center" mt={1}>
                                         {hasClearance(4) ? (
-                                            <IconButton color="error" onClick={(e) => deleteProject(p.id, e)} size="small"><DeleteIcon sx={{ fontSize: 18 }} /></IconButton>
+                                            <IconButton color="error" onClick={(e) => triggerDelete(p.id, p.name, p.code, e)} size="small"><DeleteIcon sx={{ fontSize: 18 }} /></IconButton>
                                         ) : <Box />}
                                         <Button variant="contained" disableElevation onClick={() => onOpenProject(p.id)} endIcon={<ArrowForwardIosIcon sx={{ fontSize: 10 }} />} sx={styles.accessBtn}>ACCESS_WORKSPACE</Button>
                                     </Box>
@@ -217,6 +224,14 @@ export default function ProjectArchive({ onOpenProject }) {
                 </DialogContent>
                 <DialogActions><Button onClick={() => setImportDialogOpen(false)} color="inherit">CANCEL</Button></DialogActions>
             </Dialog>
+
+            <ConfirmDeleteProjectModal 
+                open={deleteModal.open}
+                onClose={() => setDeleteModal({ open: false, id: null, name: "", code: "" })}
+                onConfirm={confirmDelete}
+                projectName={deleteModal.name}
+                projectCode={deleteModal.code}
+            />
         </Box>
     );
 }
