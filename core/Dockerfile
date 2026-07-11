@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y pkg-config libssl-dev build-essential
 WORKDIR /app
 COPY . .
 
+# Create a dummy dist folder so rust-embed compiles successfully
+RUN mkdir -p /dist && echo "API Server Running" > /dist/index.html
+
 # Build the daemon crate in release mode
 RUN cargo build --release -p openprix
 
