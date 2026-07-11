@@ -27,7 +27,7 @@ import VectorPlanEstimator from "./workspace/VectorPlanEstimator";
 import {
     Box, Typography, Button, Paper, Dialog, DialogTitle, DialogContent,
     DialogActions, FormControlLabel, Checkbox, IconButton, Tooltip,
-    List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, Chip, Grid
+    List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, Chip, Grid, Skeleton
 } from "@mui/material";
 
 // Workspace Navigation Icons
@@ -420,7 +420,48 @@ export default function ProjectWorkspace({ projectId, onBack }) {
         );
     }, [activeTab, project, regions, resources, totalAmount, renderedProjectBoq, projectResourceMap, crmContacts, orgStaff, projectBoqItems, masterBoqs, editorItem, formulaHelpOpen, exportOpts, projectId]);
 
-    if (isProjectLoading) return <Box p={5} textAlign="center"><Typography sx={{ fontFamily: "'JetBrains Mono', monospace", color: 'text.secondary' }}>Loading workspace...</Typography></Box>;
+    if (isProjectLoading) {
+        return (
+            <Box sx={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
+                {/* Skeleton Sidebar */}
+                <Paper elevation={0} sx={{ width: SIDEBAR_OPEN_WIDTH, flexShrink: 0, bgcolor: 'rgba(13, 31, 60, 0.5)', borderRight: '1px solid', borderColor: 'divider', display: { xs: 'none', md: 'flex' }, flexDirection: 'column' }}>
+                    <Box sx={{ p: 1, height: 60, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+                         <Skeleton variant="circular" width={32} height={32} sx={{ bgcolor: 'rgba(255,255,255,0.05)', mr: 1 }} />
+                    </Box>
+                    <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                        {[1,2,3,4,5,6].map(i => (
+                            <Skeleton key={i} variant="rounded" height={40} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1.5 }} />
+                        ))}
+                    </Box>
+                </Paper>
+                
+                {/* Skeleton Main Content */}
+                <Box sx={{ flexGrow: 1, p: { xs: 2, md: 3 }, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" pb={2} borderBottom="1px solid" borderColor="divider">
+                        <Box>
+                            <Skeleton variant="text" width={200} height={40} sx={{ bgcolor: 'rgba(255,255,255,0.05)' }} />
+                            <Skeleton variant="text" width={120} height={20} sx={{ bgcolor: 'rgba(255,255,255,0.05)' }} />
+                        </Box>
+                    </Box>
+                    
+                    {/* Top KPI Cards Skeleton */}
+                    <Grid container spacing={2}>
+                        {[1,2,3,4,5,6].map(i => (
+                            <Grid item xs={6} md={4} lg={2} key={i}>
+                                <Skeleton variant="rounded" height={90} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
+                            </Grid>
+                        ))}
+                    </Grid>
+                    
+                    {/* Schedule Tracker Skeleton */}
+                    <Skeleton variant="rounded" height={150} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
+                    
+                    {/* Details Skeleton */}
+                    <Skeleton variant="rounded" height={300} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
+                </Box>
+            </Box>
+        );
+    }
     if (projectError || project === null) return <Box p={5} textAlign="center"><Typography variant="h6" sx={{ fontFamily: "'JetBrains Mono', monospace", color: 'error.main', mb: 2 }}>Error: Project Not Found</Typography><Button variant="outlined" onClick={onBack}>Return to Dashboard</Button></Box>;
 
     // 🔥 ZERO-TAB GATEKEEPER: If no modules are allowed, show nothing but a lock screen.
