@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
     Box, Typography, Paper, Grid, IconButton, TextField, InputAdornment,
-    Chip, Button, Pagination, Dialog, DialogTitle, DialogContent, DialogActions, useTheme
+    Chip, Button, Pagination, Dialog, DialogTitle, DialogContent, DialogActions, useTheme, Skeleton
 } from "@mui/material";
 import SearchIcon from '@mui/icons-material/Search';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -20,6 +20,7 @@ export default function ProjectArchive({ onOpenProject }) {
     const theme = useTheme();
     const styles = getProjectArchiveStyles(theme);
     const [projects, setProjects] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [page, setPage] = useState(1);
     const itemsPerPage = 6;
@@ -28,8 +29,15 @@ export default function ProjectArchive({ onOpenProject }) {
     const [importDialogOpen, setImportDialogOpen] = useState(false);
 
     const loadData = async () => {
-        const projData = await window.api.db.getProjects();
-        setProjects((projData || []).sort((a, b) => b.createdAt - a.createdAt));
+        setIsLoading(true);
+        try {
+            const projData = await window.api.db.getProjects();
+            setProjects((projData || []).sort((a, b) => b.createdAt - a.createdAt));
+        } catch (err) {
+            console.error("Failed to load projects:", err);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     useEffect(() => { loadData(); }, []);
@@ -146,27 +154,49 @@ export default function ProjectArchive({ onOpenProject }) {
                     }}
                 />
 
-                <Grid container spacing={3}>
-                    {paginatedProjects.map(p => (
-                        <Grid item xs={12} sm={6} lg={4} xl={3} key={p.id}> {/* 🔥 Added xl={3} to take advantage of wider screens */}
-                            <Paper sx={styles.projectPaper}>
-                                <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-                                    <Box>
-                                        <Typography variant="h6" sx={styles.projectTitle}>{p.name}</Typography>
-                                        <Typography variant="caption" color="text.secondary" sx={styles.projectCode}>{p.code || "NO_CODE"}</Typography>
+                {isLoading ? (
+                    <Grid container spacing={3}>
+                        {[1, 2, 3, 4, 5, 6].map(i => (
+                            <Grid item xs={12} sm={6} lg={4} xl={3} key={i}>
+                                <Paper sx={styles.projectPaper}>
+                                    <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                                        <Box width="70%">
+                                            <Skeleton variant="text" width="90%" height={24} sx={{ bgcolor: 'rgba(255,255,255,0.08)' }} />
+                                            <Skeleton variant="text" width="40%" height={16} sx={{ bgcolor: 'rgba(255,255,255,0.08)', mt: 0.5 }} />
+                                        </Box>
+                                        <Skeleton variant="rectangular" width={40} height={18} sx={{ borderRadius: 1, bgcolor: 'rgba(255,255,255,0.08)' }} />
                                     </Box>
-                                    <Chip label={p.status || 'Draft'} size="small" variant="outlined" sx={styles.projectChip} />
-                                </Box>
-                                <Box display="flex" justifyContent="space-between" alignItems="center" mt={1}>
-                                    {hasClearance(4) ? (
-                                        <IconButton color="error" onClick={(e) => deleteProject(p.id, e)} size="small"><DeleteIcon sx={{ fontSize: 18 }} /></IconButton>
-                                    ) : <Box />}
-                                    <Button variant="contained" disableElevation onClick={() => onOpenProject(p.id)} endIcon={<ArrowForwardIosIcon sx={{ fontSize: 10 }} />} sx={styles.accessBtn}>ACCESS_WORKSPACE</Button>
-                                </Box>
-                            </Paper>
-                        </Grid>
-                    ))}
-                </Grid>
+                                    <Box display="flex" justifyContent="space-between" alignItems="center" mt={2}>
+                                        <Skeleton variant="circular" width={24} height={24} sx={{ bgcolor: 'rgba(255,255,255,0.08)' }} />
+                                        <Skeleton variant="rectangular" width={140} height={28} sx={{ borderRadius: 50, bgcolor: 'rgba(255,255,255,0.08)' }} />
+                                    </Box>
+                                </Paper>
+                            </Grid>
+                        ))}
+                    </Grid>
+                ) : (
+                    <Grid container spacing={3}>
+                        {paginatedProjects.map(p => (
+                            <Grid item xs={12} sm={6} lg={4} xl={3} key={p.id}> {/* 🔥 Added xl={3} to take advantage of wider screens */}
+                                <Paper sx={styles.projectPaper}>
+                                    <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                                        <Box>
+                                            <Typography variant="h6" sx={styles.projectTitle}>{p.name}</Typography>
+                                            <Typography variant="caption" color="text.secondary" sx={styles.projectCode}>{p.code || "NO_CODE"}</Typography>
+                                        </Box>
+                                        <Chip label={p.status || 'Draft'} size="small" variant="outlined" sx={styles.projectChip} />
+                                    </Box>
+                                    <Box display="flex" justifyContent="space-between" alignItems="center" mt={1}>
+                                        {hasClearance(4) ? (
+                                            <IconButton color="error" onClick={(e) => deleteProject(p.id, e)} size="small"><DeleteIcon sx={{ fontSize: 18 }} /></IconButton>
+                                        ) : <Box />}
+                                        <Button variant="contained" disableElevation onClick={() => onOpenProject(p.id)} endIcon={<ArrowForwardIosIcon sx={{ fontSize: 10 }} />} sx={styles.accessBtn}>ACCESS_WORKSPACE</Button>
+                                    </Box>
+                                </Paper>
+                            </Grid>
+                        ))}
+                    </Grid>
+                )}
 
                 {totalPages > 1 && (
                     <Box sx={styles.paginationBox}>
