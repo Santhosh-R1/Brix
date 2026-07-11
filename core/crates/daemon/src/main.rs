@@ -354,11 +354,16 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     let status_path = root_dir.join(".daemon_status.json");
 
 
-    let configured_port: u16 = fs::read_to_string(&config_path)
+    let configured_port: u16 = std::env::var("PORT")
         .ok()
-        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-        .and_then(|v| v.get("port").and_then(|p| p.as_u64()))
-        .map(|p| p as u16)
+        .and_then(|p| p.parse().ok())
+        .or_else(|| {
+            fs::read_to_string(&config_path)
+                .ok()
+                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                .and_then(|v| v.get("port").and_then(|p| p.as_u64()))
+                .map(|p| p as u16)
+        })
         .unwrap_or(0);
 
     let listener =
