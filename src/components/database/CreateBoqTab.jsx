@@ -6,6 +6,7 @@ import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { calculateMasterBoqRate, getResourceRate } from "../../engines/calculationEngine";
 import FormulaGuideDialog from "../workspace/FormulaGuideDialog";
 import DatabaseDialog from "./DatabaseDialog";
+import ConfirmDeleteModal from "./ConfirmDeleteModal";
 import { getCreateBoqTabStyles, getNativeStyles } from "./CreateBoqTab.styles";
 
 import { useSettings } from "../../context/SettingsContext";
@@ -29,6 +30,7 @@ export default function CreateBoqTab({ regions, resources, masterBoqs, loadData,
 
     // Dialog state
     const [dialogState, setDialogState] = useState({ open: false, title: "", message: "", severity: "warning" });
+    const [deleteModal, setDeleteModal] = useState({ open: false, rowId: null, itemName: "" });
 
     const triggerDialog = (title, message, severity = "warning") => {
         setDialogState({ open: true, title, message, severity });
@@ -92,6 +94,13 @@ export default function CreateBoqTab({ regions, resources, masterBoqs, loadData,
     const addSpreadsheetRow = () => setBoqRows([...boqRows, { id: crypto.randomUUID(), itemType: "resource", itemId: "", formulaStr: "1", qty: 1 }]);
     const updateSpreadsheetRow = (id, field, value) => setBoqRows(boqRows.map(row => row.id === id ? { ...row, [field]: value, ...(field === 'itemType' ? { itemId: "", tempCode: undefined, tempDesc: undefined } : {}) } : row));
     const removeSpreadsheetRow = (id) => setBoqRows(boqRows.filter(row => row.id !== id));
+
+    const confirmRemoveComponent = () => {
+        if (deleteModal.rowId) {
+            removeSpreadsheetRow(deleteModal.rowId);
+        }
+        setDeleteModal({ open: false, rowId: null, itemName: "" });
+    };
 
     const { renderedRows, subTotal, ohAmount, profitAmount, grandTotal } = useMemo(() => {
         let sub = 0; const computedRows = [];
@@ -277,7 +286,14 @@ export default function CreateBoqTab({ regions, resources, masterBoqs, loadData,
 
                                     <TableCell color="text.secondary" sx={styles.bodyCellText}>{formatCurrency(row.rate)}</TableCell>
                                     <TableCell sx={styles.bodyCellTextBold}>{formatCurrency(row.amount)}</TableCell>
-                                    <TableCell align="center"><IconButton size="small" color="error" onClick={() => removeSpreadsheetRow(row.id)}><DeleteIcon fontSize="small" /></IconButton></TableCell>
+                                    <TableCell align="center">
+                                        <IconButton size="small" color="error" onClick={() => {
+                                            const itemName = (sourceList.find(s => s.id === row.itemId)?.description) || row.tempDesc || (sourceList.find(s => s.id === row.itemId)?.code) || row.tempCode || "Empty Component Row";
+                                            setDeleteModal({ open: true, rowId: row.id, itemName });
+                                        }}>
+                                            <DeleteIcon fontSize="small" />
+                                        </IconButton>
+                                    </TableCell>
                                 </TableRow>
                             )
                         })}
@@ -329,6 +345,13 @@ export default function CreateBoqTab({ regions, resources, masterBoqs, loadData,
                 title={dialogState.title}
                 message={dialogState.message}
                 severity={dialogState.severity}
+            />
+
+            <ConfirmDeleteModal 
+                open={deleteModal.open}
+                onClose={() => setDeleteModal({ open: false, rowId: null, itemName: "" })}
+                onConfirm={confirmRemoveComponent}
+                itemName={deleteModal.itemName}
             />
         </Paper>
     );
