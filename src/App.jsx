@@ -79,7 +79,7 @@ function AppContent({ mode, setMode }) {
     
     // UI Navigation State
     const [currentView, setCurrentView] = useState('home');
-    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activeProjectId, setActiveProjectId] = useState(null);
 
     // Modals State

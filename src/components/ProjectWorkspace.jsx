@@ -484,7 +484,7 @@ export default function ProjectWorkspace({ projectId, onBack }) {
 
     return (
         <Box sx={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
-            <Paper elevation={0} sx={{ width: sidebarOpen ? SIDEBAR_OPEN_WIDTH : { xs: 0, md: SIDEBAR_CLOSED_WIDTH }, flexShrink: 0, bgcolor: 'rgba(13, 31, 60, 0.5)', borderRight: '1px solid', borderColor: 'divider', transition: 'width 0.225s cubic-bezier(0.4, 0, 0.2, 1)', overflowX: 'hidden', display: 'flex', flexDirection: 'column', position: { xs: 'fixed', md: 'relative' }, height: '100%', zIndex: { xs: 1100, md: 1 }, left: 0, top: 0, transform: 'translateZ(0)' }}>
+            <Paper elevation={24} sx={{ width: sidebarOpen ? SIDEBAR_OPEN_WIDTH : { xs: 0, md: SIDEBAR_CLOSED_WIDTH }, flexShrink: 0, bgcolor: 'rgba(10, 20, 35, 0.85)', backdropFilter: 'blur(20px)', borderRight: '1px solid rgba(255,255,255,0.05)', transition: 'width 0.225s cubic-bezier(0.4, 0, 0.2, 1)', overflowX: 'hidden', display: 'flex', flexDirection: 'column', position: { xs: 'fixed', md: 'relative' }, height: '100%', zIndex: { xs: 1100, md: 1 }, left: 0, top: 0, transform: 'translateZ(0)', boxShadow: '4px 0 24px rgba(0,0,0,0.4)' }}>
                 <Box sx={{ p: 1, display: 'flex', justifyContent: sidebarOpen ? 'flex-end' : 'center', alignItems: 'center', height: 60 }}>
                     <IconButton onClick={() => setSidebarOpen(!sidebarOpen)} sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}>
                         {sidebarOpen ? <MenuOpenIcon /> : <MenuIcon />}
@@ -506,18 +506,22 @@ export default function ProjectWorkspace({ projectId, onBack }) {
                                 {cat.children.map(child => (
                                     <Tooltip key={child.id} title={!sidebarOpen ? child.label : ""} placement="right" disableInteractive>
                                         <ListItem disablePadding sx={{ mb: 0.5 }}>
-                                            <ListItemButton
-                                                onClick={() => { setActiveTab(child.id); if (window.innerWidth < 900) setSidebarOpen(false); }}
-                                                selected={activeTab === child.id}
-                                                sx={{
-                                                    borderRadius: 1.5, minHeight: 40, justifyContent: sidebarOpen ? 'initial' : 'center', px: 2.5,
-                                                    '&.Mui-selected': { bgcolor: `rgba(${parseInt(cat.color.slice(1, 3), 16)}, ${parseInt(cat.color.slice(3, 5), 16)}, ${parseInt(cat.color.slice(5, 7), 16)}, 0.15)` },
-                                                    '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' }
-                                                }}
-                                            >
-                                                <ListItemIcon sx={{ minWidth: 0, mr: sidebarOpen ? 2 : 'auto', justifyContent: 'center', color: activeTab === child.id ? cat.color : 'text.secondary' }}>
-                                                    {child.icon}
-                                                </ListItemIcon>
+                                                <ListItemButton
+                                                    onClick={() => { setActiveTab(child.id); if (window.innerWidth < 900) setSidebarOpen(false); }}
+                                                    selected={activeTab === child.id}
+                                                    sx={{
+                                                        borderRadius: 2, minHeight: 44, justifyContent: sidebarOpen ? 'initial' : 'center', px: 2.5, mb: 1, position: 'relative', overflow: 'hidden',
+                                                        '&.Mui-selected': { 
+                                                            bgcolor: `rgba(${parseInt(cat.color.slice(1, 3), 16)}, ${parseInt(cat.color.slice(3, 5), 16)}, ${parseInt(cat.color.slice(5, 7), 16)}, 0.15)`,
+                                                            '&::before': { content: '""', position: 'absolute', left: 0, top: '20%', bottom: '20%', width: '4px', borderRadius: '0 4px 4px 0', bgcolor: cat.color, boxShadow: `0 0 10px ${cat.color}` }
+                                                        },
+                                                        '&:hover': { bgcolor: 'rgba(255,255,255,0.08)' },
+                                                        transition: 'all 0.2s ease-in-out'
+                                                    }}
+                                                >
+                                                    <ListItemIcon sx={{ minWidth: 0, mr: sidebarOpen ? 2.5 : 'auto', justifyContent: 'center', color: activeTab === child.id ? cat.color : 'text.secondary', transition: 'all 0.2s ease-in-out', transform: activeTab === child.id ? 'scale(1.1)' : 'scale(1)' }}>
+                                                        {child.icon}
+                                                    </ListItemIcon>
                                                 <ListItemText
                                                     primary={child.label}
                                                     sx={{ opacity: sidebarOpen ? 1 : 0, transition: 'opacity 0.2s ease-in-out', m: 0 }}
