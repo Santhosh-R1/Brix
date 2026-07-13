@@ -19,7 +19,7 @@ const getTargetUrl = () => {
         return localStorage.getItem('openprix_last_server') || import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000';
     }
     if (window.location.port !== '5173') {
-        return window.location.origin;
+        return import.meta.env.VITE_API_URL || window.location.origin;
     }
     return localStorage.getItem('openprix_last_server') || import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000';
 };
