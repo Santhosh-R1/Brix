@@ -168,9 +168,7 @@ export default function MasterBoqEditor({ editorItem, onClose, onSaveSuccess, pr
                             <TextField label="ITEM_CODE" value={editBoqCode} onChange={e => setEditBoqCode(e.target.value)} sx={{ flex: 1 }} InputLabelProps={{ sx: { fontFamily: "'JetBrains Mono', monospace", fontSize: '11px' } }} InputProps={{ sx: { fontFamily: "'JetBrains Mono', monospace", fontSize: '13px' } }} />
                             <TextField label="DESCRIPTION" value={editBoqDesc} onChange={e => setEditBoqDesc(e.target.value)} sx={{ flex: 3 }} InputLabelProps={{ sx: { fontFamily: "'JetBrains Mono', monospace", fontSize: '11px' } }} InputProps={{ sx: { fontFamily: "'JetBrains Mono', monospace", fontSize: '13px' } }} />
                             <TextField label="UNIT" value={editBoqUnit} onChange={e => setEditBoqUnit(e.target.value)} sx={{ width: { xs: '100%', md: 100 } }} InputLabelProps={{ sx: { fontFamily: "'JetBrains Mono', monospace", fontSize: '11px' } }} InputProps={{ sx: { fontFamily: "'JetBrains Mono', monospace", fontSize: '13px' } }} />
-                            <TextField select label="REGION" value={editPreviewRegion} onChange={e => setEditPreviewRegion(e.target.value)} sx={{ width: { xs: '100%', md: 200 } }} InputLabelProps={{ sx: { fontFamily: "'JetBrains Mono', monospace", fontSize: '11px' } }} InputProps={{ sx: { fontFamily: "'JetBrains Mono', monospace", fontSize: '13px' } }}>
-                                {regions.map(r => <MenuItem key={r.id} value={r.name}>{r.name}</MenuItem>)}
-                            </TextField>
+
                         </Box>
 
                         {/* 🔥 FIXED: Applied Box inside Alert to stop Flexbox from breaking Alert icon */}
