@@ -7,8 +7,9 @@ dns.setDefaultResultOrder('verbatim')
 export default defineConfig(({ command }) => {
   return {
     plugins: [react()],
-    // If building for production (Electron .exe), use relative paths. Otherwise, use absolute.
-    base: command === 'build' ? './' : '/',
+    // If building for production (Electron .exe), use relative paths. 
+    // If building for Render web deployment, use absolute paths.
+    base: process.env.RENDER ? '/' : (command === 'build' ? './' : '/'),
     server: {
       host: '127.0.0.1',
       port: 5173,
