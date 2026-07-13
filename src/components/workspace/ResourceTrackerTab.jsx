@@ -91,8 +91,9 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
                         const resourceData = resources.find(r => r.id === resId);
 
                         if (resourceData && !masterBoqCodes.has(resourceData.code)) {
-                            const totalRequired = Number(comp.qty) * Number(item.computedQty || 0);
-
+                            const ohMultiplier = 1 + (Number(item.masterBoq.overhead || 0) / 100);
+                            const profitMultiplier = 1 + (Number(item.masterBoq.profit || 0) / 100);
+                            const totalRequired = Number(comp.qty) * ohMultiplier * profitMultiplier * Number(item.computedQty || 0);
                             if (!tracker[phase][resId]) {
                                 tracker[phase][resId] = {
                                     code: resourceData.code,
