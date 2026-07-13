@@ -4,13 +4,15 @@ import {
     TableHead, TableRow, Switch, FormControlLabel, Select, MenuItem, TextField, Button, useTheme
 } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import LockIcon from '@mui/icons-material/Lock';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
 import { getResourceTrackerTabStyles, getNativeStyles } from './ResourceTrackerTab.styles';
 import { tableInputActiveStyle } from '../../styles';
 import { getResourceRate } from '../../engines/calculationEngine';
 import { useSettings } from '../../context/SettingsContext';
 import { exportResourceTrackerPdf } from '../../utils/exportPdf';
 
-export default function ResourceTrackerTab({ project, renderedProjectBoq, resources, regions = [], updateProject, masterBoqs = [] }) {
+export default function ResourceTrackerTab({ project, renderedProjectBoq, resources, regions = [], updateProject, masterBoqs = [], togglePriceLock }) {
     const theme = useTheme();
     const styles = getResourceTrackerTabStyles(theme);
     const nativeStyles = getNativeStyles(tableInputActiveStyle);
@@ -226,6 +228,39 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
 
     return (
         <Box display="flex" flexDirection="column" gap={4}>
+            {/* 🔥 PRICE LOCK BANNER */}
+            <Box sx={{ 
+                p: 2, borderRadius: 2, 
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                flexDirection: { xs: 'column', md: 'row' }, gap: 2,
+                bgcolor: project?.isPriceLocked ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid',
+                borderColor: project?.isPriceLocked ? '#10b981' : '#f59e0b'
+            }}>
+                <Box display="flex" alignItems="center" gap={2}>
+                    {project?.isPriceLocked ? <LockIcon sx={{ color: '#10b981', fontSize: 32 }} /> : <LockOpenIcon sx={{ color: '#f59e0b', fontSize: 32 }} />}
+                    <Box>
+                        <Typography variant="subtitle1" fontWeight="bold" sx={{ color: project?.isPriceLocked ? '#10b981' : '#f59e0b', fontFamily: "'JetBrains Mono', monospace" }}>
+                            {project?.isPriceLocked ? "🔒 ESTIMATE FINALIZED & PRICING LOCKED" : "⚠️ LIVE MARKET RATES ACTIVE"}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: "'JetBrains Mono', monospace" }}>
+                            {project?.isPriceLocked 
+                                ? "Future market rate changes will NOT affect this project's estimates." 
+                                : "Rates are fluctuating with the global market. Lock pricing once estimate is finalized."}
+                        </Typography>
+                    </Box>
+                </Box>
+                <Button 
+                    variant="contained" 
+                    color={project?.isPriceLocked ? "success" : "warning"} 
+                    onClick={togglePriceLock} 
+                    startIcon={project?.isPriceLocked ? <LockIcon /> : <LockOpenIcon />} 
+                    sx={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 'bold', borderRadius: 50, whiteSpace: 'nowrap' }}
+                >
+                    {project?.isPriceLocked ? "UNLOCK PRICING" : "FINALIZE & LOCK ESTIMATE"}
+                </Button>
+            </Box>
+
             {/* MODE TOGGLE BANNER */}
             <Paper sx={styles.toggleBannerPaper}>
                 <Box>

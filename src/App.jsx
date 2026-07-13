@@ -124,7 +124,7 @@ function AppContent({ mode, setMode }) {
         { id: 'database', label: 'Core Database', icon: <StorageIcon />, action: () => setCurrentView('database') },
         // { id: 'logs', label: 'System Logs', icon: <MenuBookIcon />, action: () => setCurrentView('logs') },
         // { id: 'servermanager', label: 'Network Host', icon: <RouterIcon />, action: () => setCurrentView('servermanager'), tauriOnly: true },
-        { id: 'settings', label: 'Control Panel', icon: <SettingsIcon />, action: () => setCurrentView('settings') }
+        // { id: 'settings', label: 'Control Panel', icon: <SettingsIcon />, action: () => setCurrentView('settings') }
     ];
 
     // Fetch staff for chat (Restored from your initial code)

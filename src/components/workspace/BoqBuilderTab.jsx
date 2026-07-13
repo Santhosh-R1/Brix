@@ -12,6 +12,8 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import SearchIcon from '@mui/icons-material/Search';
+import LockIcon from '@mui/icons-material/Lock';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
 
 import { tableInputStyle } from "../../styles";
 import { getBoqBuilderTabStyles, getNativeStyles } from "./BoqBuilderTab.styles";
@@ -259,7 +261,7 @@ const BoqTableRow = ({ item, formatCurrency, provided, snapshot, updateBoqMutati
 // ============================================================================
 // 🚀 MAIN COMPONENT
 // ============================================================================
-export default function BoqBuilderTab({ projectId, openEditDialog, setFormulaHelpOpen }) {
+export default function BoqBuilderTab({ projectId, openEditDialog, setFormulaHelpOpen, project, togglePriceLock }) {
     const theme = useTheme();
     const styles = getBoqBuilderTabStyles(theme);
     const { formatCurrency } = useSettings();
@@ -339,6 +341,39 @@ export default function BoqBuilderTab({ projectId, openEditDialog, setFormulaHel
     return (
         <Paper sx={styles.mainPaper}>
             <BoqAddForm projectId={projectId} projectBoqItems={projectBoqItems} masterBoqs={masterBoqs} saveBoqMutation={saveBoqMutation} />
+
+            {/* 🔥 PRICE LOCK BANNER */}
+            <Box sx={{ 
+                p: 2, mb: 3, mt: 3, borderRadius: 2, 
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                flexDirection: { xs: 'column', md: 'row' }, gap: 2,
+                bgcolor: project?.isPriceLocked ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid',
+                borderColor: project?.isPriceLocked ? '#10b981' : '#f59e0b'
+            }}>
+                <Box display="flex" alignItems="center" gap={2}>
+                    {project?.isPriceLocked ? <LockIcon sx={{ color: '#10b981', fontSize: 32 }} /> : <LockOpenIcon sx={{ color: '#f59e0b', fontSize: 32 }} />}
+                    <Box>
+                        <Typography variant="subtitle1" fontWeight="bold" sx={{ color: project?.isPriceLocked ? '#10b981' : '#f59e0b', fontFamily: "'JetBrains Mono', monospace" }}>
+                            {project?.isPriceLocked ? "🔒 ESTIMATE FINALIZED & PRICING LOCKED" : "⚠️ LIVE MARKET RATES ACTIVE"}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: "'JetBrains Mono', monospace" }}>
+                            {project?.isPriceLocked 
+                                ? "Future market rate changes will NOT affect this project's BOQ." 
+                                : "Rates are fluctuating with the global market. Lock pricing once estimate is finalized."}
+                        </Typography>
+                    </Box>
+                </Box>
+                <Button 
+                    variant="contained" 
+                    color={project?.isPriceLocked ? "success" : "warning"} 
+                    onClick={togglePriceLock} 
+                    startIcon={project?.isPriceLocked ? <LockIcon /> : <LockOpenIcon />} 
+                    sx={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 'bold', borderRadius: 50, whiteSpace: 'nowrap' }}
+                >
+                    {project?.isPriceLocked ? "UNLOCK PRICING" : "FINALIZE & LOCK ESTIMATE"}
+                </Button>
+            </Box>
 
             <Alert severity="info" sx={styles.alertBox}>
                 <Box>💡 Drag the grip icon (⋮⋮) to reorder items or move them between phases.</Box>

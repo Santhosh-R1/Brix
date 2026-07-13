@@ -76,8 +76,8 @@ const RAW_CATEGORIES = {
             // { id: "kanban", label: "Task Board", minClearance: 2, icon: <ViewKanbanOutlinedIcon /> },
             // { id: "gallery", label: "Site Photo Gallery", minClearance: 2, icon: <PhotoLibraryOutlinedIcon /> },
             // { id: "daily_log", label: "Daily Log", minClearance: 2, icon: <MenuBookOutlinedIcon /> },
-            { id: "mbook", label: "Measurement Book", minClearance: 2, icon: <SquareFootOutlinedIcon /> },
-            { id: "pdf_estimator", label: "PDF Qty Estimator", minClearance: 2, icon: <PictureAsPdfIcon /> }
+            // { id: "mbook", label: "Measurement Book", minClearance: 2, icon: <SquareFootOutlinedIcon /> },
+            // { id: "pdf_estimator", label: "PDF Qty Estimator", minClearance: 2, icon: <PictureAsPdfIcon /> }
         ]
     },
     supply_chain: {
@@ -404,12 +404,12 @@ export default function ProjectWorkspace({ projectId, onBack }) {
                 {activeTab === "details" && (<ProjectDetailsTab project={project} updateProject={updateProject} regions={regions} resources={resources} totalAmount={totalAmount} projectBoqItems={renderedProjectBoq} togglePriceLock={togglePriceLock} crmContacts={crmContacts} orgStaff={orgStaff} loadData={loadData} />)}
                 {activeTab === "documents" && (<DocumentsTab projectId={projectId} />)}
                 {activeTab === "gallery" && (<SiteGalleryTab projectId={projectId} />)}
-                {activeTab === "boq" && (<BoqBuilderTab projectId={projectId} openEditDialog={(item) => setEditorItem(item)} setFormulaHelpOpen={setFormulaHelpOpen} />)}
+                {activeTab === "boq" && (<BoqBuilderTab projectId={projectId} openEditDialog={(item) => setEditorItem(item)} setFormulaHelpOpen={setFormulaHelpOpen} togglePriceLock={togglePriceLock} project={project} />)}
                 {activeTab === "mbook" && (<MeasurementBookTab projectId={projectId} setFormulaHelpOpen={setFormulaHelpOpen} />)}
                 {activeTab === "schedule" && (<GanttScheduleTab projectId={projectId} />)}
                 {activeTab === "subcontractors" && (<SubcontractorBidTab projectId={projectId} />)}
                 {activeTab === "daily_log" && (<DailyLogTab projectId={projectId} />)}
-                {activeTab === "resources" && (<ResourceTrackerTab project={project} renderedProjectBoq={renderedProjectBoq} projectResourceMap={projectResourceMap} resources={resources} regions={regions} updateProject={updateProject} loadData={loadData} masterBoqs={masterBoqs} />)}
+                {activeTab === "resources" && (<ResourceTrackerTab project={project} renderedProjectBoq={renderedProjectBoq} projectResourceMap={projectResourceMap} resources={resources} regions={regions} updateProject={updateProject} loadData={loadData} masterBoqs={masterBoqs} togglePriceLock={togglePriceLock} />)}
                 {activeTab === "procurement" && (<ProcurementTab projectId={projectId} />)}
                 {activeTab === "billing" && (<ClientBillingTab projectId={projectId} />)}
                 {activeTab === "kanban" && (<KanbanBoardTab projectId={projectId} />)}
@@ -426,15 +426,15 @@ export default function ProjectWorkspace({ projectId, onBack }) {
                 {/* Skeleton Sidebar */}
                 <Paper elevation={0} sx={{ width: SIDEBAR_OPEN_WIDTH, flexShrink: 0, bgcolor: 'rgba(13, 31, 60, 0.5)', borderRight: '1px solid', borderColor: 'divider', display: { xs: 'none', md: 'flex' }, flexDirection: 'column' }}>
                     <Box sx={{ p: 1, height: 60, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-                         <Skeleton variant="circular" width={32} height={32} sx={{ bgcolor: 'rgba(255,255,255,0.05)', mr: 1 }} />
+                        <Skeleton variant="circular" width={32} height={32} sx={{ bgcolor: 'rgba(255,255,255,0.05)', mr: 1 }} />
                     </Box>
                     <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                        {[1,2,3,4,5,6].map(i => (
+                        {[1, 2, 3, 4, 5, 6].map(i => (
                             <Skeleton key={i} variant="rounded" height={40} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1.5 }} />
                         ))}
                     </Box>
                 </Paper>
-                
+
                 {/* Skeleton Main Content */}
                 <Box sx={{ flexGrow: 1, p: { xs: 2, md: 3 }, display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <Box display="flex" justifyContent="space-between" alignItems="center" pb={2} borderBottom="1px solid" borderColor="divider">
@@ -443,19 +443,19 @@ export default function ProjectWorkspace({ projectId, onBack }) {
                             <Skeleton variant="text" width={120} height={20} sx={{ bgcolor: 'rgba(255,255,255,0.05)' }} />
                         </Box>
                     </Box>
-                    
+
                     {/* Top KPI Cards Skeleton */}
                     <Grid container spacing={2}>
-                        {[1,2,3,4,5,6].map(i => (
+                        {[1, 2, 3, 4, 5, 6].map(i => (
                             <Grid item xs={6} md={4} lg={2} key={i}>
                                 <Skeleton variant="rounded" height={90} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
                             </Grid>
                         ))}
                     </Grid>
-                    
+
                     {/* Schedule Tracker Skeleton */}
                     <Skeleton variant="rounded" height={150} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
-                    
+
                     {/* Details Skeleton */}
                     <Skeleton variant="rounded" height={300} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
                 </Box>
