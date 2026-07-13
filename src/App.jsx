@@ -119,7 +119,7 @@ function AppContent({ mode, setMode }) {
     const navItems = [
         { id: 'home', label: 'Dashboard', icon: <HomeIcon />, action: () => setCurrentView('home') },
         // { id: 'new_project', label: 'Initiate Project', icon: <CreateNewFolderIcon />, action: handleCreateProject },
-        { id: 'archive', label: 'Project Archive', icon: <FolderSpecialIcon />, action: () => setCurrentView('archive') },
+        { id: 'archive', label: 'Project', icon: <FolderSpecialIcon />, action: () => setCurrentView('archive') },
         // { id: 'directory', label: 'System Directory', icon: <AutoStoriesIcon />, action: () => setCurrentView('directory') },
         { id: 'database', label: 'Core Database', icon: <StorageIcon />, action: () => setCurrentView('database') },
         // { id: 'logs', label: 'System Logs', icon: <MenuBookIcon />, action: () => setCurrentView('logs') },
