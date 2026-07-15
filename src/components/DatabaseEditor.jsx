@@ -10,6 +10,7 @@ import LocalAtmOutlinedIcon from '@mui/icons-material/LocalAtmOutlined';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import BuildOutlinedIcon from '@mui/icons-material/BuildOutlined';
 import SettingsBackupRestoreOutlinedIcon from '@mui/icons-material/SettingsBackupRestoreOutlined';
+import AutoGraphIcon from '@mui/icons-material/AutoGraph';
 
 import ResourcesTab from "./database/ResourcesTab";
 import CreateBoqTab from "./database/CreateBoqTab";
@@ -234,7 +235,7 @@ export default function DatabaseEditor() {
                                 regions={regions} 
                                 resources={resources} 
                                 onEditBoq={handleEditBoq} 
-                                deleteMasterBoq={openDeleteConfirmation} // Trigger Modal instead of Alert
+                                deleteMasterBoq={openDeleteConfirmation} 
                                 loadData={loadData} 
                             />
                         )}

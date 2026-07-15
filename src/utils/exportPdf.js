@@ -253,7 +253,7 @@ export const exportPoPdf = async (project, po) => {
 /**
  * 04. EXPORT RESOURCE TRACKER REPORT
  */
-export const exportResourceTrackerPdf = async (project, resourceTracker, selectedRegion, selectedBrands, getSelectedRate) => {
+export const exportResourceTrackerPdf = async (project, resourceTracker, selectedRegion, selectedBrands, customRates, getSelectedRate) => {
     const company = await window.api.db.getSettings('company_info');
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
@@ -285,7 +285,11 @@ export const exportResourceTrackerPdf = async (project, resourceTracker, selecte
             const resourceObj = data.resourceData;
             const selectedBrand = selectedBrands[`${phase}_${resId}`] || "General";
             const activeRegionName = selectedRegion || project?.region || "";
-            const rate = getSelectedRate(resourceObj, selectedBrands[`${phase}_${resId}`] || "", activeRegionName);
+            const baseRate = getSelectedRate(resourceObj, selectedBrands[`${phase}_${resId}`] || "", activeRegionName);
+            
+            // Apply custom project-level rate override if it exists
+            const rate = customRates[`${phase}_${resId}`] !== undefined ? customRates[`${phase}_${resId}`] : baseRate;
+            
             const variance = data.estimatedQty - data.actualQty;
             const estCost = data.estimatedQty * rate;
             const actualCost = data.actualQty * rate;

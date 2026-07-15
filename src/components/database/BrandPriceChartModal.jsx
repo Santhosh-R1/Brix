@@ -72,18 +72,18 @@ export default function BrandPriceChartModal({ open, onClose, resource, regions,
 
     // All historical months for this resource (for the dropdown)
     const availableMonths = Object.keys(history).sort().reverse();
-    
+
     // Extract unique years from history keys
     const yearsFromHistory = availableMonths.map(m => m.split('-')[0]);
     const currentYearNum = new Date().getFullYear();
     const startYear = 2026;
-    
+
     // Generate years from the current system year down to the baseline year 2026
     const generatedYears = [];
     for (let y = currentYearNum; y >= startYear; y--) {
         generatedYears.push(String(y));
     }
-    
+
     const allYearsSet = new Set([...yearsFromHistory, ...generatedYears]);
     const availableYears = Array.from(allYearsSet).sort().reverse();
 

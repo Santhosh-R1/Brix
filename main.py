@@ -1,5 +1,11 @@
-from fastapi import FastAPI, UploadFile, Form
+from fastapi import FastAPI, UploadFile, Form, File
 from fastapi.middleware.cors import CORSMiddleware
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression, Ridge, BayesianRidge
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.pipeline import make_pipeline
+import io
 import fitz  # PyMuPDF
 import math
 import cv2
@@ -939,5 +945,323 @@ async def calculate_model_quantities(
         "flooring_area_sqm": round(total_flooring_area_m2, 2),
         "flooring_perimeter_m": round(total_flooring_perimeter_m, 2),
         "detected_objects": detected_objects,
+        "detected_objects": detected_objects,
         "object_counts": counts
     }
+
+import os
+
+@app.post("/api/ml/train-predict")
+async def train_predict_ml(
+    file: UploadFile = File(...), 
+    months_to_predict: int = Form(1),
+    past_year: int = Form(2026),
+    quarter: str = Form("Jan to Apr"),
+    region: str = Form("Default")
+):
+    try:
+        contents = await file.read()
+        
+        # Read without headers first to find the correct header row
+        df_raw = pd.read_excel(io.BytesIO(contents), header=None)
+        
+        header_row = -1
+        for i, row in df_raw.iterrows():
+            row_vals = [str(x).strip() for x in row.values]
+            if 'Description' in row_vals and 'Lmr Rate (₹)' in row_vals:
+                header_row = i
+                break
+                
+        if header_row != -1:
+            df_raw.columns = df_raw.iloc[header_row]
+            df = df_raw.iloc[header_row + 1:].reset_index(drop=True)
+            df.columns = df.columns.astype(str).str.strip()
+        else:
+            # Fallback if we couldn't find the exact header, just in case
+            df = pd.read_excel(io.BytesIO(contents))
+            df.columns = df.columns.str.strip()
+        
+        if 'Description' not in df.columns or 'Lmr Rate (₹)' not in df.columns:
+            return {"error": f"Excel file must contain 'Description' and 'Lmr Rate (₹)'. Found: {list(df.columns)}"}
+            
+        # Map quarter to a list of months for the model
+        if quarter == "JANMAR":
+            months = [1, 2, 3]
+        elif quarter == "APRJUN":
+            months = [4, 5, 6]
+        elif quarter == "JULSEP":
+            months = [7, 8, 9]
+        elif quarter == "OCTDEC":
+            months = [10, 11, 12]
+        else:
+            months = [1, 2, 3]
+            
+        # Standardize the incoming data for all 3 months of the quarter
+        dfs = []
+        for m in months:
+            m_df = pd.DataFrame({
+                'Year': past_year,
+                'Month': m,
+                'Region': region,
+                'Resource': df['Description'],
+                'Rate': pd.to_numeric(df['Lmr Rate (₹)'], errors='coerce')
+            })
+            dfs.append(m_df)
+            
+        new_data = pd.concat(dfs, ignore_index=True)
+        
+        # Drop invalid rows
+        new_data = new_data.dropna(subset=['Resource', 'Rate'])
+        
+        # Cumulative training: append to a persistent CSV
+        history_file = "market_training_data.csv"
+        if os.path.exists(history_file) and os.path.getsize(history_file) > 0:
+            history_df = pd.read_csv(history_file)
+            if 'Region' not in history_df.columns:
+                history_df['Region'] = region
+            history_df['Rate'] = pd.to_numeric(history_df['Rate'], errors='coerce')
+            history_df = pd.concat([history_df, new_data])
+            # Keep only the latest entry if the same quarter/year/region is uploaded twice
+            history_df = history_df.drop_duplicates(subset=['Year', 'Month', 'Region', 'Resource'], keep='last')
+        else:
+            history_df = new_data
+            
+        # Save back to disk
+        history_df.to_csv(history_file, index=False)
+        
+        predictions = {}
+        
+        # Only predict for the uploaded region to save processing time
+        predict_df = history_df[history_df['Region'] == region] if 'Region' in history_df.columns else history_df
+        
+        # Train and Predict for each resource using fast groupby
+        for resource, resource_df in predict_df.groupby('Resource'):
+            
+            # Find the last date in the history for this resource
+            last_year = resource_df['Year'].max()
+            last_month = resource_df[resource_df['Year'] == last_year]['Month'].max()
+            last_date = pd.to_datetime(f"{int(last_year)}-{int(last_month):02d}-01")
+            
+            future_dates = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=months_to_predict, freq='ME')
+            
+            if len(resource_df) < 2:
+                # Not enough data for ML, just forward-fill the last known rate
+                last_rate = resource_df['Rate'].iloc[-1]
+                pred_rates = [last_rate] * months_to_predict
+            else:
+                # Train Bayesian Ridge Regression for a stable probabilistic trend extrapolation
+                X = pd.DataFrame({'Time_Index': resource_df['Year'] + (resource_df['Month'] - 1) / 12})
+                y = resource_df['Rate']
+                
+                model = BayesianRidge()
+                model.fit(X, y)
+                
+                future_X = pd.DataFrame({
+                    'Time_Index': future_dates.year + (future_dates.month - 1) / 12
+                })
+                
+                pred_rates = model.predict(future_X)
+            
+            predictions[resource] = [
+                {"date": future_dates[i].strftime("%Y-%m-%d"), "predicted_rate": round(float(pred_rates[i]), 2)}
+                for i in range(months_to_predict)
+            ]
+            
+        return {"success": True, "predictions": predictions, "message": f"Successfully trained on data for {past_year} {quarter}!"}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
+_cache_mtime = 0
+_cached_history_df = None
+_predictions_cache = {}
+_future_predictions_cache = {}
+
+def get_history_df():
+    global _cached_history_df, _cache_mtime, _predictions_cache, _future_predictions_cache
+    history_file = "market_training_data.csv"
+    if not os.path.exists(history_file) or os.path.getsize(history_file) == 0:
+        return pd.DataFrame()
+        
+    current_mtime = os.path.getmtime(history_file)
+    if _cached_history_df is None or current_mtime != _cache_mtime:
+        _cached_history_df = pd.read_csv(history_file)
+        if 'Region' not in _cached_history_df.columns:
+            _cached_history_df['Region'] = "Default"
+        _cache_mtime = current_mtime
+        _predictions_cache.clear()
+        _future_predictions_cache.clear()
+        
+    return _cached_history_df
+
+@app.get("/api/ml/predictions")
+async def get_latest_predictions(region: str = None):
+    try:
+        global _predictions_cache
+        if region in _predictions_cache:
+            return {"success": True, "predictions": _predictions_cache[region]}
+            
+        history_df = get_history_df()
+        if history_df.empty:
+            return {"success": True, "predictions": {}}
+            
+        if region:
+            history_df = history_df[history_df['Region'] == region]
+            
+        predictions = {}
+        
+        for resource, resource_df in history_df.groupby('Resource'):
+            
+            last_year = resource_df['Year'].max()
+            last_month = resource_df[resource_df['Year'] == last_year]['Month'].max()
+            last_date = pd.to_datetime(f"{int(last_year)}-{int(last_month):02d}-01")
+            
+            future_dates = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=1, freq='ME')
+            
+            if len(resource_df) < 2:
+                pred_rates = [resource_df['Rate'].iloc[-1]]
+            else:
+                X = pd.DataFrame({'Time_Index': resource_df['Year'] + (resource_df['Month'] - 1) / 12})
+                y = resource_df['Rate']
+                model = BayesianRidge()
+                model.fit(X, y)
+                future_X = pd.DataFrame({'Time_Index': future_dates.year + (future_dates.month - 1) / 12})
+                pred_rates = model.predict(future_X)
+                
+            predictions[str(resource).strip()] = round(float(pred_rates[0]), 2)
+            
+        _predictions_cache[region] = predictions
+        return {"success": True, "predictions": predictions}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
+@app.get("/api/ml/future-predictions")
+async def get_future_predictions(region: str, target_year: int, target_month: int):
+    try:
+        global _future_predictions_cache
+        cache_key = f"{region}_{target_year}_{target_month}"
+        if cache_key in _future_predictions_cache:
+            return {"success": True, "predictions": _future_predictions_cache[cache_key]}
+            
+        history_df = get_history_df()
+        if history_df.empty:
+            return {"success": True, "predictions": {}}
+            
+        if region:
+            history_df = history_df[history_df['Region'] == region]
+            
+        predictions = {}
+        target_time_index = target_year + (target_month - 1) / 12
+        target_X = pd.DataFrame({'Time_Index': [target_time_index]})
+        
+        for resource, resource_df in history_df.groupby('Resource'):
+            if len(resource_df) < 2:
+                last_rate = resource_df['Rate'].iloc[-1]
+                predictions[str(resource).strip()] = {
+                    "expected": round(float(last_rate), 2),
+                    "high": round(float(last_rate), 2),
+                    "low": round(float(last_rate), 2)
+                }
+            else:
+                X = pd.DataFrame({'Time_Index': resource_df['Year'] + (resource_df['Month'] - 1) / 12})
+                y = resource_df['Rate']
+                model = BayesianRidge()
+                model.fit(X, y)
+                pred_rate, pred_std = model.predict(target_X, return_std=True)
+                pred = float(pred_rate[0])
+                std = float(pred_std[0])
+                
+                predictions[str(resource).strip()] = {
+                    "expected": round(pred, 2),
+                    "high": round(pred + (1.96 * std), 2),
+                    "low": round(max(0, pred - (1.96 * std)), 2)
+                }
+                
+        _future_predictions_cache[cache_key] = predictions
+        return {"success": True, "predictions": predictions}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
+@app.get("/api/ml/resource-history")
+async def get_resource_history(resource: str, region: str = None):
+    try:
+        history_df = get_history_df()
+        if history_df.empty:
+            return {"success": True, "history": []}
+            
+        if region:
+            history_df = history_df[history_df['Region'] == region]
+            
+        resource_df = history_df[history_df['Resource'] == resource].copy()
+        if resource_df.empty:
+            return {"success": True, "history": []}
+            
+        # Sort chronologically
+        resource_df = resource_df.sort_values(by=['Year', 'Month'])
+        
+        # Train model to get fitted curve for history
+        X = pd.DataFrame({'Time_Index': resource_df['Year'] + (resource_df['Month'] - 1) / 12})
+        y = resource_df['Rate']
+        
+        if len(resource_df) >= 2:
+            model = BayesianRidge()
+            model.fit(X, y)
+            historical_predictions, hist_std = model.predict(X, return_std=True)
+            historical_predictions = list(historical_predictions)
+            hist_std = list(hist_std)
+        else:
+            historical_predictions = [y.iloc[0]] * len(resource_df)
+            hist_std = [0] * len(resource_df)
+            
+        # Create output history points
+        history_points = []
+        for i, row in enumerate(resource_df.itertuples()):
+            date_str = f"{int(row.Year)}-{int(row.Month):02d}"
+            pred = float(historical_predictions[i])
+            std = float(hist_std[i])
+            
+            history_points.append({
+                "date": date_str,
+                "actual_rate": round(float(row.Rate), 2),
+                "predicted_rate": round(pred, 2),
+                "predicted_rate_high": round(pred + (1.96 * std), 2),
+                "predicted_rate_low": round(pred - (1.96 * std), 2)
+            })
+            
+        # Extrapolate next 6 months
+        last_year = resource_df['Year'].max()
+        last_month = resource_df[resource_df['Year'] == last_year]['Month'].max()
+        last_date = pd.to_datetime(f"{int(last_year)}-{int(last_month):02d}-01")
+        
+        future_dates = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=6, freq='ME')
+        if len(resource_df) >= 2:
+            future_X = pd.DataFrame({'Time_Index': future_dates.year + (future_dates.month - 1) / 12})
+            future_predictions, fut_std = model.predict(future_X, return_std=True)
+            future_predictions = list(future_predictions)
+            fut_std = list(fut_std)
+        else:
+            future_predictions = [y.iloc[0]] * 6
+            fut_std = [0] * 6
+            
+        for i, date in enumerate(future_dates):
+            pred = float(future_predictions[i])
+            std = float(fut_std[i])
+            
+            history_points.append({
+                "date": date.strftime("%Y-%m"),
+                "actual_rate": None,
+                "predicted_rate": round(pred, 2),
+                "predicted_rate_high": round(pred + (1.96 * std), 2),
+                "predicted_rate_low": round(pred - (1.96 * std), 2)
+            })
+            
+        return {"success": True, "history": history_points}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
