@@ -1055,11 +1055,11 @@ async def train_predict_ml(
                 last_rate = resource_df['Rate'].iloc[-1]
                 pred_rates = [last_rate] * months_to_predict
             else:
-                # Train Bayesian Ridge Regression for a stable probabilistic trend extrapolation
+                # Train RandomForestRegressor for capturing complex non-linear market trends
                 X = pd.DataFrame({'Time_Index': resource_df['Year'] + (resource_df['Month'] - 1) / 12})
                 y = resource_df['Rate']
                 
-                model = BayesianRidge()
+                model = RandomForestRegressor(n_estimators=50, random_state=42)
                 model.fit(X, y)
                 
                 future_X = pd.DataFrame({
@@ -1144,11 +1144,27 @@ async def get_latest_predictions(region: str = None):
         traceback.print_exc()
         return {"error": str(e)}
 
-@app.get("/api/ml/future-predictions")
-async def get_future_predictions(region: str, target_year: int, target_month: int):
+from pydantic import BaseModel
+from typing import List, Optional
+
+class FuturePredictionsRequest(BaseModel):
+    region: str
+    target_year: int
+    target_month: int
+    resources: Optional[List[str]] = None
+
+@app.post("/api/ml/future-predictions")
+async def get_future_predictions(request: FuturePredictionsRequest):
     try:
+        region = request.region
+        target_year = request.target_year
+        target_month = request.target_month
+        
         global _future_predictions_cache
         cache_key = f"{region}_{target_year}_{target_month}"
+        if request.resources:
+            cache_key += "_" + str(hash("".join(sorted(request.resources))))
+            
         if cache_key in _future_predictions_cache:
             return {"success": True, "predictions": _future_predictions_cache[cache_key]}
             
@@ -1159,13 +1175,18 @@ async def get_future_predictions(region: str, target_year: int, target_month: in
         if region:
             history_df = history_df[history_df['Region'] == region]
             
+        # Pre-compute Time_Index for the entire dataframe to avoid doing it per-resource
+        # Create a copy to avoid SettingWithCopyWarning
+        work_df = history_df.copy()
+        
+        if request.resources:
+            requested = [r.strip().lower() for r in request.resources]
+            work_df = work_df[work_df['Resource'].str.strip().str.lower().isin(requested)]
+            
         predictions = {}
         target_time_index = target_year + (target_month - 1) / 12
         target_X = np.array([[target_time_index]])
         
-        # Pre-compute Time_Index for the entire dataframe to avoid doing it per-resource
-        # Create a copy to avoid SettingWithCopyWarning
-        work_df = history_df.copy()
         work_df['Time_Index'] = work_df['Year'] + (work_df['Month'] - 1) / 12
         
         for resource, resource_df in work_df.groupby('Resource'):
@@ -1173,7 +1194,7 @@ async def get_future_predictions(region: str, target_year: int, target_month: in
                 last_rate = resource_df['Rate'].iloc[-1]
                 predictions[str(resource).strip()] = {
                     "expected": round(float(last_rate), 2),
-                    "high": round(float(last_rate), 2),
+                    "high": round( (last_rate), 2),
                     "low": round(float(last_rate), 2)
                 }
             else:
@@ -1181,11 +1202,15 @@ async def get_future_predictions(region: str, target_year: int, target_month: in
                 X = resource_df['Time_Index'].values.reshape(-1, 1)
                 y = resource_df['Rate'].values
                 
-                model = BayesianRidge()
+                model = RandomForestRegressor(n_estimators=50, random_state=42)
                 model.fit(X, y)
-                pred_rate, pred_std = model.predict(target_X, return_std=True)
-                pred = float(pred_rate[0])
-                std = float(pred_std[0])
+                
+                # Get prediction
+                pred = float(model.predict(target_X)[0])
+                
+                # Calculate standard deviation across trees for confidence band
+                preds = np.array([tree.predict(target_X)[0] for tree in model.estimators_])
+                std = float(np.std(preds))
                 
                 predictions[str(resource).strip()] = {
                     "expected": round(pred, 2),
@@ -1195,6 +1220,70 @@ async def get_future_predictions(region: str, target_year: int, target_month: in
                 
         _future_predictions_cache[cache_key] = predictions
         return {"success": True, "predictions": predictions}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
+from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
+
+class LocalRate(BaseModel):
+    resource: str
+    rate: float
+    region: str
+
+class TrainLocalRatesRequest(BaseModel):
+    rates: List[LocalRate]
+
+@app.post("/api/ml/train-local-rates")
+async def train_local_rates(request: TrainLocalRatesRequest):
+    try:
+        if not request.rates:
+            return {"success": True, "message": "No rates to train on."}
+            
+        now = datetime.now()
+        current_year = now.year
+        current_month = now.month
+        
+        dfs = []
+        for r in request.rates:
+            if not r.resource: continue
+            dfs.append(pd.DataFrame({
+                'Year': [current_year],
+                'Month': [current_month],
+                'Region': [r.region or "Trivandrum"],
+                'Resource': [r.resource],
+                'Rate': [r.rate]
+            }))
+            
+        if not dfs:
+            return {"success": True, "message": "No valid rates to train."}
+            
+        new_data = pd.concat(dfs, ignore_index=True)
+        new_data['Resource'] = new_data['Resource'].str.strip()
+        
+        history_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "core", "market_training_data.csv")
+        if os.path.exists(history_file) and os.path.getsize(history_file) > 0:
+            history_df = pd.read_csv(history_file)
+            if 'Region' not in history_df.columns:
+                history_df['Region'] = "General"
+            history_df['Rate'] = pd.to_numeric(history_df['Rate'], errors='coerce')
+            history_df['Resource'] = history_df['Resource'].str.strip()
+            
+            history_df = pd.concat([history_df, new_data])
+            history_df = history_df.drop_duplicates(subset=['Year', 'Month', 'Region', 'Resource'], keep='last')
+        else:
+            history_df = new_data
+            
+        history_df.to_csv(history_file, index=False)
+        
+        # Clear cache so next prediction request trains on the new data
+        global _future_predictions_cache
+        _future_predictions_cache.clear()
+        
+        return {"success": True, "message": f"Successfully trained on {len(request.rates)} local market rates!"}
     except Exception as e:
         import traceback
         traceback.print_exc()

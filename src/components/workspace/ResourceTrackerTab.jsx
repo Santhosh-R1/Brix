@@ -81,9 +81,28 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
             const [year, month] = executionDate.split('-');
             setIsPredicting(true);
             try {
+                const activeResources = [];
+                if (resourceTracker) {
+                    Object.values(resourceTracker).forEach(phaseData => {
+                        Object.values(phaseData).forEach(data => {
+                            if (data.description) activeResources.push(data.description.trim());
+                        });
+                    });
+                }
+                const uniqueResources = [...new Set(activeResources)];
+
                 const baseUrl = import.meta.env.VITE_PYTHON_API_URL || 'http://127.0.0.1:8000';
-                const url = `${baseUrl}/api/ml/future-predictions?region=${encodeURIComponent(project?.region || "")}&target_year=${year}&target_month=${month}`;
-                const res = await fetch(url);
+                const url = `${baseUrl}/api/ml/future-predictions`;
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        region: project?.region || "",
+                        target_year: parseInt(year),
+                        target_month: parseInt(month),
+                        resources: uniqueResources
+                    })
+                });
                 const data = await res.json();
                 if (data.success && data.predictions) {
                     setFuturePredictions(data.predictions);
@@ -330,17 +349,27 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
         });
 
         const syncPromises = [];
+        const ratesToTrain = [];
+        let activeRegionName = project?.region || "";
+        if (!activeRegionName && regions && regions.length > 0) activeRegionName = regions[0].name || "";
+
         for (const resId of Object.keys(ratesToSync)) {
             const data = ratesToSync[resId];
             if (data.brand) {
                 let rateToSync = data.rate;
+                const resource = resources.find(r => String(r.id) === String(resId));
                 if (rateToSync === undefined) {
-                    const resource = resources.find(r => String(r.id) === String(resId));
-                    let activeRegion = project?.region || "";
-                    if (!activeRegion && regions && regions.length > 0) activeRegion = regions[0].name || "";
-                    rateToSync = getResourceRate(resource, activeRegion) || 0;
+                    rateToSync = getResourceRate(resource, activeRegionName) || 0;
                 }
                 syncPromises.push(updateGlobalBrandRate(resId, data.brand, rateToSync));
+                
+                if (resource && rateToSync) {
+                    ratesToTrain.push({
+                        resource: resource.description,
+                        rate: rateToSync,
+                        region: activeRegionName
+                    });
+                }
             }
         }
         
@@ -352,6 +381,15 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
         if (syncPromises.length > 0) {
             Promise.all(syncPromises).then(() => {
                 queryClient.invalidateQueries(['resources']); 
+                
+                if (ratesToTrain.length > 0) {
+                    const baseUrl = import.meta.env.VITE_PYTHON_API_URL || 'http://127.0.0.1:8000';
+                    fetch(`${baseUrl}/api/ml/train-local-rates`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ rates: ratesToTrain })
+                    }).catch(e => console.error("Auto-training failed", e));
+                }
             }).catch(e => console.error("Background sync failed", e));
         }
     };
