@@ -176,9 +176,9 @@ const handleEmailChange = (e) => {
 
     const NAV_ITEMS = [
         { id: "profile", label: "COMPANY PROFILE", icon: <BusinessIcon />, color: '#3b82f6' },
-        { id: "organization", label: "DEPARTMENTS", icon: <AccountTreeIcon />, color: '#8b5cf6' },
-        { id: "regional", label: "REGIONAL STANDARDS", icon: <PublicIcon />, color: '#10b981' },
-        { id: "automation", label: "FILE AUTOMATION & RULES", icon: <FolderSpecialIcon />, color: '#f59e0b' }, // 🔥 Updated label
+        // { id: "organization", label: "DEPARTMENTS", icon: <AccountTreeIcon />, color: '#8b5cf6' },
+        // { id: "regional", label: "REGIONAL STANDARDS", icon: <PublicIcon />, color: '#10b981' },
+        // { id: "automation", label: "FILE AUTOMATION & RULES", icon: <FolderSpecialIcon />, color: '#f59e0b' }, // 🔥 Updated label
     ];
 
     return (
