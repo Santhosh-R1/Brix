@@ -1014,7 +1014,7 @@ async def train_predict_ml(
         new_data = new_data.dropna(subset=['Resource', 'Rate'])
         
         # Cumulative training: append to a persistent CSV
-        history_file = "market_training_data.csv"
+        history_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "core", "market_training_data.csv")
         if os.path.exists(history_file) and os.path.getsize(history_file) > 0:
             history_df = pd.read_csv(history_file)
             if 'Region' not in history_df.columns:
@@ -1080,7 +1080,7 @@ _future_predictions_cache = {}
 
 def get_history_df():
     global _cached_history_df, _cache_mtime, _predictions_cache, _future_predictions_cache
-    history_file = "market_training_data.csv"
+    history_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "core", "market_training_data.csv")
     if not os.path.exists(history_file) or os.path.getsize(history_file) == 0:
         return pd.DataFrame()
         
