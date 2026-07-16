@@ -743,7 +743,7 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                                 </Button>
                             </Grid>
                             <Grid item xs={12} sm={4}>
-                                <Button fullWidth variant="outlined" color="info" startIcon={<LanguageIcon />} onClick={() => window.open('https://price3.kerala.gov.in/price3_pwd/call_lmr_home.htm', '_blank')} sx={styles.actionButton}>
+                                <Button fullWidth variant="outlined" color="info" startIcon={<LanguageIcon />} onClick={() => window.open('https://price.kerala.gov.in/price3_pmu/', '_blank')} sx={styles.actionButton}>
                                     KERALA_PWD
                                 </Button>
                             </Grid>
