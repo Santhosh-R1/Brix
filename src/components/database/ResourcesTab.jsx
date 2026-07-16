@@ -22,6 +22,7 @@ import BrandRatesModal from "./BrandRatesModal";
 import BrandPriceChartModal from "./BrandPriceChartModal";
 import AIPredictionChartModal from "./AIPredictionChartModal";
 import AutoGraphIcon from '@mui/icons-material/AutoGraph';
+import LanguageIcon from '@mui/icons-material/Language';
 
 // 🔥 DEBOUCED SEARCH INPUT COMPONENT FOR HIGH PERFORMANCE
 const SearchInput = memo(({ value, onChange }) => {
@@ -730,15 +731,20 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                                     <MenuItem value="OCTDEC">OCTDEC</MenuItem>
                                 </TextField>
                             </Grid>
-                            <Grid item xs={12} sm={6}>
+                            <Grid item xs={12} sm={4}>
                                 <input type="file" accept=".xlsx, .xls, .csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
                                 <Button fullWidth variant="outlined" color="primary" startIcon={<UploadIcon />} disabled={!importRegion} onClick={() => fileInputRef.current.click()} sx={styles.actionButton}>
                                     UPLOAD_DATA
                                 </Button>
                             </Grid>
-                            <Grid item xs={12} sm={6}>
+                            <Grid item xs={12} sm={4}>
                                 <Button fullWidth variant="outlined" color="secondary" startIcon={<DownloadIcon />} onClick={downloadTemplate} sx={styles.actionButton}>
                                     DOWNLOAD_TEMPLATE
+                                </Button>
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
+                                <Button fullWidth variant="outlined" color="info" startIcon={<LanguageIcon />} onClick={() => window.open('https://price3.kerala.gov.in/price3_pwd/call_lmr_home.htm', '_blank')} sx={styles.actionButton}>
+                                    KERALA_PWD
                                 </Button>
                             </Grid>
                         </Grid>

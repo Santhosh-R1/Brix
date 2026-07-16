@@ -593,9 +593,9 @@ export default function ProjectWorkspace({ projectId, onBack }) {
                             <Button variant="outlined" color="error" startIcon={<PictureAsPdfIcon />} onClick={handleExportResourceTracker} sx={{ borderRadius: 50, fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', height: '32px' }}>
                                 RESOURCE TRACKER
                             </Button>
-                            <Button variant="contained" color="success" startIcon={<DownloadIcon />} onClick={() => exportProjectExcel(project, renderedProjectBoq, masterBoqs, resources)} disableElevation sx={{ borderRadius: 50, fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', height: '32px' }}>
+                            {/* <Button variant="contained" color="success" startIcon={<DownloadIcon />} onClick={() => exportProjectExcel(project, renderedProjectBoq, masterBoqs, resources)} disableElevation sx={{ borderRadius: 50, fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', height: '32px' }}>
                                 EXCEL
-                            </Button>
+                            </Button> */}
                         </Box>
                     )}
                 </Box>
