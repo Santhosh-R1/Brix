@@ -279,6 +279,7 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
         } else {
             delete currentActuals[`brand_${phase}_${resourceId}`];
         }
+        delete currentActuals[`rate_${phase}_${resourceId}`];
         queueActualsUpdate(currentActuals);
     };
 
