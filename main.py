@@ -1013,6 +1013,9 @@ async def train_predict_ml(
         # Drop invalid rows
         new_data = new_data.dropna(subset=['Resource', 'Rate'])
         
+        # Clean up resource names to prevent duplicates from whitespaces
+        new_data['Resource'] = new_data['Resource'].str.strip()
+        
         # Cumulative training: append to a persistent CSV
         history_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "core", "market_training_data.csv")
         if os.path.exists(history_file) and os.path.getsize(history_file) > 0:
@@ -1020,6 +1023,9 @@ async def train_predict_ml(
             if 'Region' not in history_df.columns:
                 history_df['Region'] = region
             history_df['Rate'] = pd.to_numeric(history_df['Rate'], errors='coerce')
+            
+            # Clean historical resource names to fix existing whitespace duplicates
+            history_df['Resource'] = history_df['Resource'].str.strip()
             history_df = pd.concat([history_df, new_data])
             # Keep only the latest entry if the same quarter/year/region is uploaded twice
             history_df = history_df.drop_duplicates(subset=['Year', 'Month', 'Region', 'Resource'], keep='last')
