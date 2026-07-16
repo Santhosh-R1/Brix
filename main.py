@@ -1155,9 +1155,14 @@ async def get_future_predictions(region: str, target_year: int, target_month: in
             
         predictions = {}
         target_time_index = target_year + (target_month - 1) / 12
-        target_X = pd.DataFrame({'Time_Index': [target_time_index]})
+        target_X = np.array([[target_time_index]])
         
-        for resource, resource_df in history_df.groupby('Resource'):
+        # Pre-compute Time_Index for the entire dataframe to avoid doing it per-resource
+        # Create a copy to avoid SettingWithCopyWarning
+        work_df = history_df.copy()
+        work_df['Time_Index'] = work_df['Year'] + (work_df['Month'] - 1) / 12
+        
+        for resource, resource_df in work_df.groupby('Resource'):
             if len(resource_df) < 2:
                 last_rate = resource_df['Rate'].iloc[-1]
                 predictions[str(resource).strip()] = {
@@ -1166,8 +1171,10 @@ async def get_future_predictions(region: str, target_year: int, target_month: in
                     "low": round(float(last_rate), 2)
                 }
             else:
-                X = pd.DataFrame({'Time_Index': resource_df['Year'] + (resource_df['Month'] - 1) / 12})
-                y = resource_df['Rate']
+                # Use numpy arrays instead of pandas DataFrames inside the loop for massive speedup
+                X = resource_df['Time_Index'].values.reshape(-1, 1)
+                y = resource_df['Rate'].values
+                
                 model = BayesianRidge()
                 model.fit(X, y)
                 pred_rate, pred_std = model.predict(target_X, return_std=True)
