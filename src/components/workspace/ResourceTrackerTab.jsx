@@ -167,31 +167,46 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
                 const components = typeof item.masterBoq.components === 'string'
                     ? JSON.parse(item.masterBoq.components)
                     : item.masterBoq.components;
+                
+                const ohPercent = Number(item.masterBoq.overhead || 0) / 100;
+                const profitPercent = Number(item.masterBoq.profit || 0) / 100;
 
-                components.forEach(comp => {
-                    if (comp.itemType === 'resource') {
-                        const resId = comp.itemId;
-                        const resourceData = resources.find(r => r.id === resId);
+                const extractResources = (comps, parentQty) => {
+                    comps.forEach(comp => {
+                        const markupMultiplier = 1 + ohPercent + profitPercent;
+                        const rawQty = Number(comp.qty || 0) * parentQty;
+                        const totalRequired = rawQty * markupMultiplier;
 
-                        if (resourceData && !masterBoqCodes.has(resourceData.code)) {
-                            const ohPercent = Number(item.masterBoq.overhead || 0) / 100;
-                            const profitPercent = Number(item.masterBoq.profit || 0) / 100;
-                            const markupMultiplier = 1 + ohPercent + profitPercent;
-                            const totalRequired = Number(comp.qty) * markupMultiplier * Number(item.computedQty || 0);
-                            if (!tracker[phase][resId]) {
-                                tracker[phase][resId] = {
-                                    code: resourceData.code,
-                                    description: resourceData.description,
-                                    unit: resourceData.unit,
-                                    estimatedQty: 0,
-                                    actualQty: trackingMode === 'auto' ? (autoActuals[`${phase}_${resId}`] || 0) : (manualActuals[`${phase}_${resId}`] || 0),
-                                    resourceData: resourceData
-                                };
+                        if (comp.itemType === 'resource') {
+                            const resId = comp.itemId;
+                            const resourceData = resources.find(r => r.id === resId);
+
+                            if (resourceData && !masterBoqCodes.has(resourceData.code)) {
+                                if (!tracker[phase][resId]) {
+                                    tracker[phase][resId] = {
+                                        code: resourceData.code,
+                                        description: resourceData.description,
+                                        unit: resourceData.unit,
+                                        estimatedQty: 0,
+                                        actualQty: trackingMode === 'auto' ? (autoActuals[`${phase}_${resId}`] || 0) : (manualActuals[`${phase}_${resId}`] || 0),
+                                        resourceData: resourceData
+                                    };
+                                }
+                                tracker[phase][resId].estimatedQty += totalRequired;
                             }
-                            tracker[phase][resId].estimatedQty += totalRequired;
+                        } else if (comp.itemType === 'boq') {
+                            const nestedBoq = masterBoqs.find(b => b.id === comp.itemId);
+                            if (nestedBoq && nestedBoq.components) {
+                                const nestedComponents = typeof nestedBoq.components === 'string'
+                                    ? JSON.parse(nestedBoq.components)
+                                    : nestedBoq.components;
+                                extractResources(nestedComponents, rawQty);
+                            }
                         }
-                    }
-                });
+                    });
+                };
+
+                extractResources(components, Number(item.computedQty || 0));
             }
         });
 
