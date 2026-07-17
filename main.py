@@ -1026,6 +1026,16 @@ async def train_predict_ml(
             
             # Clean historical resource names to fix existing whitespace duplicates
             history_df['Resource'] = history_df['Resource'].str.strip()
+            
+            # Check for duplicates: if any of the new rows already exist in history with the same (Year, Month, Region)
+            duplicate_check = history_df[
+                (history_df['Year'] == past_year) & 
+                (history_df['Region'].str.lower() == region.lower()) & 
+                (history_df['Month'].isin(months))
+            ]
+            if not duplicate_check.empty:
+                return {"error": f"Training data for {region} ({quarter} {past_year}) already exists in the database. Duplicate uploads are not allowed."}
+
             history_df = pd.concat([history_df, new_data])
             # Keep only the latest entry if the same quarter/year/region is uploaded twice
             history_df = history_df.drop_duplicates(subset=['Year', 'Month', 'Region', 'Resource'], keep='last')

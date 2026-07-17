@@ -574,6 +574,18 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                     });
                     
                     if (mlResponse.ok) {
+                        const mlData = await mlResponse.json();
+                        if (mlData.error) {
+                            setUploadStatus({
+                                active: true,
+                                current: 0,
+                                total: 0,
+                                status: 'error',
+                                message: mlData.error
+                            });
+                            return; // Stop here, do not show success message
+                        }
+                        
                         // Immediately fetch updated predictions for the current selected region
                         if (selectedRegion) {
                             const predResponse = await fetch(`${baseUrl}/api/ml/predictions?region=${encodeURIComponent(selectedRegion)}`);
