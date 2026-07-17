@@ -524,7 +524,7 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                 }
 
                 const total = formattedData.length;
-                setUploadStatus({ active: true, current: 0, total, status: 'loading' });
+                setUploadStatus({ active: true, current: 0, total, status: 'loading', message: "Parsing Excel file..." });
 
                 const bulkPayload = formattedData.map(item => {
                     let existingRes = resources.find(r => r.code === item.code);
@@ -555,8 +555,20 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                     }
                 });
 
-                setUploadStatus({ active: true, current: total, total, status: 'loading' });
-                await window.api.db.bulkSaveResources(bulkPayload);
+                const chunkSize = 50;
+                for (let i = 0; i < total; i += chunkSize) {
+                    const chunk = bulkPayload.slice(i, i + chunkSize);
+                    await window.api.db.bulkSaveResources(chunk);
+                    setUploadStatus({ active: true, current: Math.min(i + chunkSize, total), total, status: 'loading', message: `Processing items into [${importRegion}] market...` });
+                }
+
+                let trainingProgress = 0;
+                setUploadStatus({ active: true, current: 0, total: 100, status: 'loading', title: "TRAINING_AI_MODEL", message: "Training AI model with new data..." });
+                const trainingInterval = setInterval(() => {
+                    trainingProgress += Math.floor(Math.random() * 5) + 1;
+                    if (trainingProgress > 95) trainingProgress = 95;
+                    setUploadStatus(prev => ({ ...prev, current: trainingProgress, total: 100 }));
+                }, 500);
 
                 // --- SEND DATA TO MACHINE LEARNING BACKEND FOR CONTINUOUS TRAINING ---
                 try {
@@ -576,6 +588,7 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                     if (mlResponse.ok) {
                         const mlData = await mlResponse.json();
                         if (mlData.error) {
+                            clearInterval(trainingInterval);
                             setUploadStatus({
                                 active: true,
                                 current: 0,
@@ -599,14 +612,18 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                     console.error("Machine Learning training request failed:", mlErr);
                 }
 
+                clearInterval(trainingInterval);
                 setUploadStatus({
                     active: true,
-                    current: total,
-                    total,
+                    current: 100,
+                    total: 100,
                     status: 'success',
                     message: `${importRegion} region data uploaded successfully`
                 });
                 loadData();
+                setTimeout(() => {
+                    setUploadStatus(prev => ({ ...prev, active: false }));
+                }, 3000);
             } catch (err) {
                 console.error("Import Error:", err);
                 setUploadStatus({
@@ -974,13 +991,11 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                 
                 <Box textAlign="center" sx={styles.uploadBox}>
                     <Typography variant="h6" sx={styles.uploadTitle}>
-                        {uploadStatus.status === 'success' ? "IMPORT SUCCESSFUL" : uploadStatus.status === 'error' ? "IMPORT FAILED" : "IMPORTING_EXCEL_DATA"}
+                        {uploadStatus.status === 'success' ? "IMPORT SUCCESSFUL" : uploadStatus.status === 'error' ? "IMPORT FAILED" : (uploadStatus.title || "IMPORTING_EXCEL_DATA")}
                     </Typography>
                     
                     <Typography variant="body2" sx={styles.uploadSubtitle}>
-                        {uploadStatus.status === 'success' || uploadStatus.status === 'error' 
-                            ? uploadStatus.message 
-                            : `Processing items into [${importRegion}] market...`}
+                        {uploadStatus.message || `Processing items into [${importRegion}] market...`}
                     </Typography>
                     
                     {uploadStatus.status !== 'success' && uploadStatus.status !== 'error' && uploadStatus.total > 0 && (
