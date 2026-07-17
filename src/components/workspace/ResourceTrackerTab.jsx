@@ -30,7 +30,8 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
 
     const [futurePredictions, setFuturePredictions] = useState({});
     const [isPredicting, setIsPredicting] = useState(false);
-    const [executionDate, setExecutionDate] = useState("");
+    const [startDate, setStartDate] = useState("");
+    const [endDate, setEndDate] = useState("");
     const [syncStatus, setSyncStatus] = useState("idle");
 
     const pendingActuals = React.useRef(null);
@@ -57,28 +58,36 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
 
     // Load initial from DB
     useEffect(() => {
-        if (!executionDate && project?.actualResources) {
+        if (!startDate && project?.actualResources) {
              const parsed = getLatestActuals();
-             if (parsed && parsed.executionDate) {
-                 setExecutionDate(parsed.executionDate);
+             if (parsed) {
+                 if (parsed.startDate) setStartDate(parsed.startDate);
+                 if (parsed.endDate) setEndDate(parsed.endDate);
              }
         }
-    }, [project?.actualResources, executionDate]);
+    }, [project?.actualResources, startDate]);
 
-    const handleExecutionDateChange = async (val) => {
-        setExecutionDate(val);
+    const handleDateChange = (field, val) => {
         const currentActuals = getLatestActuals();
-        currentActuals.executionDate = val;
+        if (field === 'start') {
+            setStartDate(val);
+            currentActuals.startDate = val;
+        } else {
+            setEndDate(val);
+            currentActuals.endDate = val;
+        }
         queueActualsUpdate(currentActuals);
     };
 
     useEffect(() => {
         const fetchPredictions = async () => {
-            if (!executionDate) {
+            if (!startDate || !endDate) {
                 setFuturePredictions({});
                 return;
             }
-            const [year, month] = executionDate.split('-');
+            const [startYear, startMonth] = startDate.split('-');
+            const [endYear, endMonth] = endDate.split('-');
+            
             setIsPredicting(true);
             try {
                 const activeResources = [];
@@ -98,8 +107,10 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         region: project?.region || "",
-                        target_year: parseInt(year),
-                        target_month: parseInt(month),
+                        target_start_year: parseInt(startYear),
+                        target_start_month: parseInt(startMonth),
+                        target_end_year: parseInt(endYear),
+                        target_end_month: parseInt(endMonth),
                         resources: uniqueResources
                     })
                 });
@@ -116,7 +127,7 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
             }
         };
         fetchPredictions();
-    }, [executionDate, project?.region]);
+    }, [startDate, endDate, project?.region]);
 
     const toggleMode = async () => {
         await updateProject("resourceTrackingMode", trackingMode === 'manual' ? 'auto' : 'manual');
@@ -586,7 +597,7 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
 
                             <Box borderTop="1px solid rgba(255,255,255,0.1)" pt={2}>
                                 <Typography className="market-data-title-active">
-                                    {executionDate ? `AI FORECAST (${executionDate})` : "AI FORECAST (PENDING DATE)"}
+                                    {(startDate && endDate) ? `AI FORECAST (${startDate} TO ${endDate})` : "AI FORECAST (PENDING DATES)"}
                                 </Typography>
                                 
                                 {prediction ? (
@@ -688,11 +699,20 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
                 <Box display="flex" alignItems="center" gap={3} flexWrap="wrap">
                     <TextField 
                         type="month"
-                        label="TARGET EXECUTION MONTH (AI FORECAST)"
+                        label="PROJECT START MONTH"
                         size="small"
                         InputLabelProps={{ shrink: true }}
-                        value={executionDate}
-                        onChange={(e) => handleExecutionDateChange(e.target.value)}
+                        value={startDate}
+                        onChange={(e) => handleDateChange('start', e.target.value)}
+                        className="execution-date-input"
+                    />
+                    <TextField 
+                        type="month"
+                        label="PROJECT END MONTH"
+                        size="small"
+                        InputLabelProps={{ shrink: true }}
+                        value={endDate}
+                        onChange={(e) => handleDateChange('end', e.target.value)}
                         className="execution-date-input"
                     />
                     <FormControlLabel
