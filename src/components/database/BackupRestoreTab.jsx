@@ -31,7 +31,7 @@ export default function BackupRestoreTab({ loadData }) {
             const dateStr = new Date().toISOString().split('T')[0];
             const link = document.createElement('a');
             link.href = `data:application/octet-stream;base64,${res}`;
-            link.download = `OpenPrix_Master_Backup_${dateStr}.sqlite`;
+            link.download = `OpenPrix_Master_Backup_${dateStr}.backup`;
 
             document.body.appendChild(link);
             link.click();
@@ -51,7 +51,7 @@ export default function BackupRestoreTab({ loadData }) {
         }
 
         try {
-            const fileResult = await window.api.os.pickFile(".sqlite");
+            const fileResult = await window.api.os.pickFile(".backup");
             if (!fileResult) return;
 
             let base64Data = "";
@@ -90,7 +90,7 @@ export default function BackupRestoreTab({ loadData }) {
     return (
         <Box sx={styles.mainBox}>
             <Alert severity="info" sx={styles.alertBox}>
-                <strong>MASTER_DATABASE_FILE (.sqlite)</strong> — Regions, Resources, Databook Items, and Projects.
+                <strong>MASTER_DATABASE_FILE (.backup)</strong> — Regions, Resources, Databook Items, and Projects.
                 This handles your entire core database. Store this file securely as a backup!
             </Alert>
             <Grid container spacing={4}>

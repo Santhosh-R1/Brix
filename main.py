@@ -1026,6 +1026,16 @@ async def train_predict_ml(
             
             # Clean historical resource names to fix existing whitespace duplicates
             history_df['Resource'] = history_df['Resource'].str.strip()
+            
+            # Check for duplicates: if any of the new rows already exist in history with the same (Year, Month, Region)
+            duplicate_check = history_df[
+                (history_df['Year'] == past_year) & 
+                (history_df['Region'].str.lower() == region.lower()) & 
+                (history_df['Month'].isin(months))
+            ]
+            if not duplicate_check.empty:
+                return {"error": f"Training data for {region} ({quarter} {past_year}) already exists in the database. Duplicate uploads are not allowed."}
+
             history_df = pd.concat([history_df, new_data])
             # Keep only the latest entry if the same quarter/year/region is uploaded twice
             history_df = history_df.drop_duplicates(subset=['Year', 'Month', 'Region', 'Resource'], keep='last')
@@ -1149,19 +1159,23 @@ from typing import List, Optional
 
 class FuturePredictionsRequest(BaseModel):
     region: str
-    target_year: int
-    target_month: int
+    target_start_year: int
+    target_start_month: int
+    target_end_year: int
+    target_end_month: int
     resources: Optional[List[str]] = None
 
 @app.post("/api/ml/future-predictions")
 async def get_future_predictions(request: FuturePredictionsRequest):
     try:
         region = request.region
-        target_year = request.target_year
-        target_month = request.target_month
+        target_start_year = request.target_start_year
+        target_start_month = request.target_start_month
+        target_end_year = request.target_end_year
+        target_end_month = request.target_end_month
         
         global _future_predictions_cache
-        cache_key = f"{region}_{target_year}_{target_month}"
+        cache_key = f"{region}_{target_start_year}_{target_start_month}_{target_end_year}_{target_end_month}"
         if request.resources:
             cache_key += "_" + str(hash("".join(sorted(request.resources))))
             
@@ -1184,33 +1198,51 @@ async def get_future_predictions(request: FuturePredictionsRequest):
             work_df = work_df[work_df['Resource'].str.strip().str.lower().isin(requested)]
             
         predictions = {}
-        target_time_index = target_year + (target_month - 1) / 12
-        target_X = np.array([[target_time_index]])
+        
+        target_features = []
+        curr_y, curr_m = target_start_year, target_start_month
+        while curr_y < target_end_year or (curr_y == target_end_year and curr_m <= target_end_month):
+            ti = curr_y + (curr_m - 1) / 12
+            msin = np.sin(2 * np.pi * curr_m / 12)
+            mcos = np.cos(2 * np.pi * curr_m / 12)
+            target_features.append([ti, msin, mcos])
+            curr_m += 1
+            if curr_m > 12:
+                curr_m = 1
+                curr_y += 1
+                
+        if not target_features:
+            ti = target_start_year + (target_start_month - 1) / 12
+            msin = np.sin(2 * np.pi * target_start_month / 12)
+            mcos = np.cos(2 * np.pi * target_start_month / 12)
+            target_features = [[ti, msin, mcos]]
+            
+        target_X = np.array(target_features)
         
         work_df['Time_Index'] = work_df['Year'] + (work_df['Month'] - 1) / 12
+        work_df['Month_Sin'] = np.sin(2 * np.pi * work_df['Month'] / 12)
+        work_df['Month_Cos'] = np.cos(2 * np.pi * work_df['Month'] / 12)
         
         for resource, resource_df in work_df.groupby('Resource'):
             if len(resource_df) < 2:
                 last_rate = resource_df['Rate'].iloc[-1]
                 predictions[str(resource).strip()] = {
                     "expected": round(float(last_rate), 2),
-                    "high": round( (last_rate), 2),
+                    "high": round(float(last_rate), 2),
                     "low": round(float(last_rate), 2)
                 }
             else:
-                # Use numpy arrays instead of pandas DataFrames inside the loop for massive speedup
-                X = resource_df['Time_Index'].values.reshape(-1, 1)
+                X = resource_df[['Time_Index', 'Month_Sin', 'Month_Cos']].values
                 y = resource_df['Rate'].values
                 
-                model = RandomForestRegressor(n_estimators=50, random_state=42)
+                model = make_pipeline(PolynomialFeatures(degree=2), BayesianRidge())
                 model.fit(X, y)
                 
-                # Get prediction
-                pred = float(model.predict(target_X)[0])
+                # Get prediction with confidence intervals directly from BayesianRidge
+                preds, stds = model.predict(target_X, return_std=True)
                 
-                # Calculate standard deviation across trees for confidence band
-                preds = np.array([tree.predict(target_X)[0] for tree in model.estimators_])
-                std = float(np.std(preds))
+                pred = float(np.mean(preds))
+                std = float(np.mean(stds))
                 
                 predictions[str(resource).strip()] = {
                     "expected": round(pred, 2),

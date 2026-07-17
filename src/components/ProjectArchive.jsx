@@ -135,7 +135,7 @@ export default function ProjectArchive({ onOpenProject }) {
                 <Box sx={styles.headerBox}>
                     <Box display="flex" alignItems="center" gap={2}>
                         <FolderSpecialIcon color="primary" sx={{ fontSize: 32 }} />
-                        <Typography variant="h4" fontWeight="bold" sx={styles.headerTitle}>PROJECT_ARCHIVE</Typography>
+                        <Typography variant="h4" fontWeight="bold" sx={styles.headerTitle}>PROJECT MANAGER</Typography>
                     </Box>
                     <Button 
                         variant="contained" 

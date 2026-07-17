@@ -156,7 +156,7 @@ function AppContent({ mode, setMode }) {
                     canAccessView={canAccess}
                 />
 
-                <Box component="main" sx={{ flexGrow: 1, p: currentView === 'workspace' ? 0 : 3, overflowY: 'auto' }}>
+                <Box component="main" sx={{ flexGrow: 1, p: 0, overflowY: 'auto' }}>
                     <ErrorBoundary>
                         {currentView === 'home' && (
                             <Home onOpenProject={(id) => { setActiveProjectId(id); setCurrentView('workspace'); }} />
