@@ -205,8 +205,21 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
     const [searchTerm, setSearchTerm] = useState("");
     const [importRegion, setImportRegion] = useState("");
     const [newRegion, setNewRegion] = useState("");
-    const [importYear, setImportYear] = useState(2026);
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth();
+    const currentQuarterIndex = Math.floor(currentMonth / 3);
+    const [importYear, setImportYear] = useState(currentYear);
     const [importQuarter, setImportQuarter] = useState("JANMAR");
+
+    useEffect(() => {
+        if (importYear === currentYear) {
+            const quarterMap = { "JANMAR": 0, "APRJUN": 1, "JULSEP": 2, "OCTDEC": 3 };
+            if (quarterMap[importQuarter] > currentQuarterIndex) {
+                const validQuarters = ["JANMAR", "APRJUN", "JULSEP", "OCTDEC"];
+                setImportQuarter(validQuarters[currentQuarterIndex]);
+            }
+        }
+    }, [importYear, importQuarter, currentYear, currentQuarterIndex]);
 
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 50;
@@ -714,21 +727,51 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                         <Typography variant="subtitle2" mb={2} color="text.secondary" sx={styles.monoSubtitle}>// IMPORT_EXCEL_LMR</Typography>
                         <Grid container spacing={2} alignItems="center">
                             <Grid item xs={12} sm={4}>
-                                <TextField select fullWidth size="small" label="TARGET REGION" value={importRegion} onChange={e => setImportRegion(e.target.value)}>
+                                <TextField select fullWidth size="small" label="TARGET REGION" value={importRegion} onChange={e => setImportRegion(e.target.value)}
+                                    SelectProps={{
+                                        MenuProps: {
+                                            PaperProps: {
+                                                sx: {
+                                                    bgcolor: '#0a101d', backgroundImage: 'none', border: '1px solid rgba(0,229,255,0.2)',
+                                                    '& .MuiMenuItem-root': { fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }
+                                                }
+                                            }
+                                        }
+                                    }}>
                                     {regions.map(r => <MenuItem key={r.id} value={r.name}>{r.name}</MenuItem>)}
                                 </TextField>
                             </Grid>
                             <Grid item xs={6} sm={4}>
-                                <TextField select fullWidth size="small" label="YEAR" value={importYear} onChange={e => setImportYear(e.target.value)}>
-                                    {[2020, 2021, 2022, 2023, 2024, 2025, 2026].map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}
+                                <TextField select fullWidth size="small" label="YEAR" value={importYear} onChange={e => setImportYear(e.target.value)}
+                                    SelectProps={{
+                                        MenuProps: {
+                                            PaperProps: {
+                                                sx: {
+                                                    bgcolor: '#0a101d', backgroundImage: 'none', border: '1px solid rgba(0,229,255,0.2)',
+                                                    '& .MuiMenuItem-root': { fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }
+                                                }
+                                            }
+                                        }
+                                    }}>
+                                    {Array.from({ length: 6 }, (_, i) => currentYear - 5 + i).map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}
                                 </TextField>
                             </Grid>
                             <Grid item xs={6} sm={4}>
-                                <TextField select fullWidth size="small" label="QUARTER" value={importQuarter} onChange={e => setImportQuarter(e.target.value)}>
-                                    <MenuItem value="JANMAR">JANMAR</MenuItem>
-                                    <MenuItem value="APRJUN">APRJUN</MenuItem>
-                                    <MenuItem value="JULSEP">JULSEP</MenuItem>
-                                    <MenuItem value="OCTDEC">OCTDEC</MenuItem>
+                                <TextField select fullWidth size="small" label="QUARTER" value={importQuarter} onChange={e => setImportQuarter(e.target.value)}
+                                    SelectProps={{
+                                        MenuProps: {
+                                            PaperProps: {
+                                                sx: {
+                                                    bgcolor: '#0a101d', backgroundImage: 'none', border: '1px solid rgba(0,229,255,0.2)',
+                                                    '& .MuiMenuItem-root': { fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }
+                                                }
+                                            }
+                                        }
+                                    }}>
+                                    <MenuItem value="JANMAR" disabled={importYear === currentYear && currentQuarterIndex < 0}>JANMAR</MenuItem>
+                                    <MenuItem value="APRJUN" disabled={importYear === currentYear && currentQuarterIndex < 1}>APRJUN</MenuItem>
+                                    <MenuItem value="JULSEP" disabled={importYear === currentYear && currentQuarterIndex < 2}>JULSEP</MenuItem>
+                                    <MenuItem value="OCTDEC" disabled={importYear === currentYear && currentQuarterIndex < 3}>OCTDEC</MenuItem>
                                 </TextField>
                             </Grid>
                             <Grid item xs={12} sm={4}>

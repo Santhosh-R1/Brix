@@ -14,9 +14,19 @@ export function getSelectedRate(resource, brandName, regionName) {
             if (Array.isArray(monthData)) {
                 const brandData = monthData.find(b => b.brand === brandName);
                 if (brandData) {
-                    if (regionName && brandData[regionName] !== undefined && brandData[regionName] !== "") {
-                        const rate = Number(brandData[regionName]);
-                        if (rate > 0) return rate;
+                    if (regionName) {
+                        if (brandData[regionName] !== undefined && brandData[regionName] !== "") {
+                            const rate = Number(brandData[regionName]);
+                            if (rate > 0) return rate;
+                        }
+                        const normalizedRegion = String(regionName).toLowerCase().trim();
+                        for (const [key, value] of Object.entries(brandData)) {
+                            if (key !== 'brand' && String(key).toLowerCase().trim() === normalizedRegion) {
+                                const rate = Number(value);
+                                if (rate > 0) return rate;
+                            }
+                        }
+                        return 0; // Prevent fallback to other regions
                     }
                     const availableBrandRates = Object.entries(brandData)
                         .filter(([k, v]) => k !== 'brand' && !isNaN(Number(v)) && Number(v) > 0)
@@ -56,7 +66,9 @@ export function getResourceRate(resource, regionName) {
         }
     }
 
-    // Ultimate Fallback: Return the first available price
+    if (regionName) return 0; // Prevent fallback to other regions if a specific region was requested
+
+    // Ultimate Fallback: Return the first available price (only if no region was requested)
     const availableRates = Object.values(ratesObj)
         .map(r => Number(r))
         .filter(r => !isNaN(r) && r > 0);

@@ -18,6 +18,7 @@ import LockOpenIcon from '@mui/icons-material/LockOpen';
 import { tableInputStyle } from "../../styles";
 import { getBoqBuilderTabStyles, getNativeStyles } from "./BoqBuilderTab.styles";
 import { useSettings } from '../../context/SettingsContext';
+import ConfirmDeleteModal from "../database/ConfirmDeleteModal";
 
 // 🔥 REACT QUERY & POINTER DND
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -245,7 +246,7 @@ const BoqTableRow = ({ item, formatCurrency, provided, snapshot, updateBoqMutati
             <TableCell align="center" sx={styles.actionCell}>
                 <Box display="flex" gap={0.5} justifyContent="center">
                     <IconButton color="warning" onClick={() => openEditDialog(item)} size="small"><EditIcon fontSize="small" /></IconButton>
-                    <IconButton color="error" onClick={() => deleteBoq(item.id)} size="small"><DeleteIcon fontSize="small" /></IconButton>
+                    <IconButton color="error" onClick={() => deleteBoq(item)} size="small"><DeleteIcon fontSize="small" /></IconButton>
                 </Box>
             </TableCell>
         </TableRow>
@@ -269,6 +270,22 @@ export default function BoqBuilderTab({ projectId, openEditDialog, setFormulaHel
     const { data: rawMasterBoqs = [] } = useMasterBoqs();
     const { data: rawProjectBoqs = [] } = useProjectBoqs(projectId);
     const { data: rawResources = [] } = useResources();
+
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [itemToDelete, setItemToDelete] = useState(null);
+
+    const handleDeleteClick = (item) => {
+        setItemToDelete(item);
+        setDeleteModalOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        if (itemToDelete) {
+            await deleteProjectBoq(itemToDelete.id);
+            setDeleteModalOpen(false);
+            setItemToDelete(null);
+        }
+    };
 
     const parseSafe = (str, fallback = []) => {
         if (!str) return fallback;
@@ -417,7 +434,7 @@ export default function BoqBuilderTab({ projectId, openEditDialog, setFormulaHel
                                                         <BoqTableRow
                                                             item={item} projectId={projectId} formatCurrency={formatCurrency}
                                                             provided={provided} snapshot={snapshot}
-                                                            updateBoqMutation={updateBoqMutation} deleteBoq={deleteProjectBoq} openEditDialog={openEditDialog}
+                                                            updateBoqMutation={updateBoqMutation} deleteBoq={handleDeleteClick} openEditDialog={openEditDialog}
                                                         />
                                                     )}
                                                 </Draggable>
@@ -441,6 +458,13 @@ export default function BoqBuilderTab({ projectId, openEditDialog, setFormulaHel
                     </Table>
                 </TableContainer>
             </DragDropContext>
+
+            <ConfirmDeleteModal
+                open={deleteModalOpen}
+                onClose={() => setDeleteModalOpen(false)}
+                onConfirm={confirmDelete}
+                itemName={itemToDelete?.displayDesc || "this item"}
+            />
         </Paper>
     );
 }

@@ -30,6 +30,8 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
 
     const [futurePredictions, setFuturePredictions] = useState({});
     const [isPredicting, setIsPredicting] = useState(false);
+    const today = new Date();
+    const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     const [syncStatus, setSyncStatus] = useState("idle");
@@ -702,6 +704,7 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
                         label="PROJECT START MONTH"
                         size="small"
                         InputLabelProps={{ shrink: true }}
+                        inputProps={{ min: currentMonthStr }}
                         value={startDate}
                         onChange={(e) => handleDateChange('start', e.target.value)}
                         className="execution-date-input"
@@ -711,6 +714,7 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
                         label="PROJECT END MONTH"
                         size="small"
                         InputLabelProps={{ shrink: true }}
+                        inputProps={{ min: startDate || currentMonthStr }}
                         value={endDate}
                         onChange={(e) => handleDateChange('end', e.target.value)}
                         className="execution-date-input"
