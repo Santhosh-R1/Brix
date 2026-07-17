@@ -1065,11 +1065,11 @@ async def train_predict_ml(
                 last_rate = resource_df['Rate'].iloc[-1]
                 pred_rates = [last_rate] * months_to_predict
             else:
-                # Train RandomForestRegressor for capturing complex non-linear market trends
+                # Train LinearRegression for faster market trend extrapolation
                 X = pd.DataFrame({'Time_Index': resource_df['Year'] + (resource_df['Month'] - 1) / 12})
                 y = resource_df['Rate']
                 
-                model = RandomForestRegressor(n_estimators=50, random_state=42)
+                model = LinearRegression()
                 model.fit(X, y)
                 
                 future_X = pd.DataFrame({
