@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, Form, File
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
@@ -950,6 +951,13 @@ async def calculate_model_quantities(
     }
 
 import os
+
+@app.get("/api/ml/export-training-data")
+async def export_training_data():
+    history_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "core", "market_training_data.csv")
+    if not os.path.exists(history_file):
+        return {"error": "Training data not found."}
+    return FileResponse(path=history_file, filename="market_training_data.csv", media_type="text/csv")
 
 @app.post("/api/ml/train-predict")
 async def train_predict_ml(
