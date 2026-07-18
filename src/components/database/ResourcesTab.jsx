@@ -20,6 +20,9 @@ import ConfirmDeleteModal from "./ConfirmDeleteModal";
 import InflationDrawer from "./InflationDrawer";
 import BrandRatesModal from "./BrandRatesModal";
 import BrandPriceChartModal from "./BrandPriceChartModal";
+import AIPredictionChartModal from "./AIPredictionChartModal";
+import AutoGraphIcon from '@mui/icons-material/AutoGraph';
+import LanguageIcon from '@mui/icons-material/Language';
 
 // 🔥 DEBOUCED SEARCH INPUT COMPONENT FOR HIGH PERFORMANCE
 const SearchInput = memo(({ value, onChange }) => {
@@ -86,6 +89,8 @@ const RateInputCell = memo(({ resource, regionName, onSave, ghostInputStyle }) =
 // 🔥 HIGH-PERFORMANCE MEMOIZED RESOURCE ROW
 const ResourceRow = memo(({
     res,
+    aiPrediction,
+    predictionsLoading,
     index,
     currentPage,
     itemsPerPage,
@@ -93,6 +98,7 @@ const ResourceRow = memo(({
     handleSaveRate,
     handleOpenBrandModal,
     handleOpenBrandChart,
+    handleOpenAIPredictionModal,
     openDeleteResourceModal,
     ghostInputStyle,
     theme
@@ -123,8 +129,17 @@ const ResourceRow = memo(({
                 </TableCell>
             )}
 
+            <TableCell sx={{ color: '#8b5cf6', fontWeight: 'bold' }}>
+                {predictionsLoading ? (
+                    <CircularProgress size={16} sx={{ color: '#8b5cf6' }} />
+                ) : aiPrediction ? `₹${aiPrediction}` : '---'}
+            </TableCell>
+
             <TableCell align="right" sx={styles.actionsBox}>
                 <Box display="flex" justifyContent="flex-end" gap={0.5}>
+                    <IconButton size="small" sx={{ color: '#00e5ff' }} onClick={() => handleOpenAIPredictionModal(res)} title="AI Prediction Chart">
+                        <AutoGraphIcon fontSize="small" />
+                    </IconButton>
                     <IconButton size="small" color="primary" onClick={() => handleOpenBrandModal(res)} sx={styles.editIcon} title="Edit Brand Rates">
                         <EditIcon fontSize="small" />
                     </IconButton>
@@ -190,6 +205,21 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
     const [searchTerm, setSearchTerm] = useState("");
     const [importRegion, setImportRegion] = useState("");
     const [newRegion, setNewRegion] = useState("");
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth();
+    const currentQuarterIndex = Math.floor(currentMonth / 3);
+    const [importYear, setImportYear] = useState(currentYear);
+    const [importQuarter, setImportQuarter] = useState("JANMAR");
+
+    useEffect(() => {
+        if (importYear === currentYear) {
+            const quarterMap = { "JANMAR": 0, "APRJUN": 1, "JULSEP": 2, "OCTDEC": 3 };
+            if (quarterMap[importQuarter] > currentQuarterIndex) {
+                const validQuarters = ["JANMAR", "APRJUN", "JULSEP", "OCTDEC"];
+                setImportQuarter(validQuarters[currentQuarterIndex]);
+            }
+        }
+    }, [importYear, importQuarter, currentYear, currentQuarterIndex]);
 
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 50;
@@ -202,6 +232,30 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
     const [selectedRegion, setSelectedRegion] = useState(regions[0]?.name || "");
     const [brandSearchTerm, setBrandSearchTerm] = useState("");
     const [uploadStatus, setUploadStatus] = useState({ active: false, current: 0, total: 0, status: 'idle', message: '' });
+    const [predictions, setPredictions] = useState({});
+    const [predictionsLoading, setPredictionsLoading] = useState(false);
+
+    useEffect(() => {
+        const fetchPredictions = async () => {
+            if (!selectedRegion) return;
+            setPredictionsLoading(true);
+            try {
+                const baseUrl = import.meta.env.VITE_PYTHON_API_URL || 'http://127.0.0.1:8000';
+                const response = await fetch(`${baseUrl}/api/ml/predictions?region=${encodeURIComponent(selectedRegion)}`);
+                const data = await response.json();
+                if (data.success && data.predictions) {
+                    setPredictions(data.predictions);
+                } else {
+                    setPredictions({});
+                }
+            } catch (err) {
+                console.error("Failed to fetch predictions:", err);
+            } finally {
+                setPredictionsLoading(false);
+            }
+        };
+        fetchPredictions();
+    }, [selectedRegion]);
 
     useEffect(() => {
         if (regions.length > 0 && !selectedRegion) {
@@ -213,6 +267,14 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
     const [brandChartResource, setBrandChartResource] = useState(null);
     const [brandChartMonthYear, setBrandChartMonthYear] = useState("");
     const [analyticsTab, setAnalyticsTab] = useState("brands");
+
+    const [aiPredictionModalOpen, setAiPredictionModalOpen] = useState(false);
+    const [aiPredictionResource, setAiPredictionResource] = useState(null);
+
+    const handleOpenAIPredictionModal = useCallback((res) => {
+        setAiPredictionResource(res);
+        setAiPredictionModalOpen(true);
+    }, []);
     const [hideEmptyRates, setHideEmptyRates] = useState(true);
 
     const [deleteConfig, setDeleteConfig] = useState({
@@ -339,11 +401,28 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                 ...currentHistory,
                 { date: new Date().toISOString().split('T')[0], rate: value[regionName], region: regionName }
             ];
-            await window.api.db.updateResource(id, 'rates', JSON.stringify(value));
+            await window.api.db.updateResource(id, 'rates', typeof value === 'string' ? value : JSON.stringify(value));
             await window.api.db.updateResource(id, 'rateHistory', JSON.stringify(updatedHistory));
         } else {
-            await window.api.db.updateResource(id, field, value);
+            let finalValue = value;
+            if (field === 'rates' && typeof value === 'object') {
+                finalValue = JSON.stringify(value);
+            }
+            await window.api.db.updateResource(id, field, finalValue);
         }
+        
+        if (res) {
+            if (field === 'rates') {
+                try {
+                    res.rates = typeof value === 'string' ? JSON.parse(value) : value;
+                } catch (e) {
+                    // Ignore parse error
+                }
+            } else {
+                res[field] = value;
+            }
+        }
+        
         loadData();
     }, [loadData, resources]);
 
@@ -445,7 +524,7 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                 }
 
                 const total = formattedData.length;
-                setUploadStatus({ active: true, current: 0, total, status: 'loading' });
+                setUploadStatus({ active: true, current: 0, total, status: 'loading', message: "Parsing Excel file..." });
 
                 const bulkPayload = formattedData.map(item => {
                     let existingRes = resources.find(r => r.code === item.code);
@@ -476,17 +555,75 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                     }
                 });
 
-                setUploadStatus({ active: true, current: total, total, status: 'loading' });
-                await window.api.db.bulkSaveResources(bulkPayload);
+                const chunkSize = 50;
+                for (let i = 0; i < total; i += chunkSize) {
+                    const chunk = bulkPayload.slice(i, i + chunkSize);
+                    await window.api.db.bulkSaveResources(chunk);
+                    setUploadStatus({ active: true, current: Math.min(i + chunkSize, total), total, status: 'loading', message: `Processing items into [${importRegion}] market...` });
+                }
 
+                let trainingProgress = 0;
+                setUploadStatus({ active: true, current: 0, total: 100, status: 'loading', title: "TRAINING_AI_MODEL", message: "Training AI model with new data..." });
+                const trainingInterval = setInterval(() => {
+                    trainingProgress += Math.floor(Math.random() * 5) + 1;
+                    if (trainingProgress > 95) trainingProgress = 95;
+                    setUploadStatus(prev => ({ ...prev, current: trainingProgress, total: 100 }));
+                }, 500);
+
+                // --- SEND DATA TO MACHINE LEARNING BACKEND FOR CONTINUOUS TRAINING ---
+                try {
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    formData.append("months_to_predict", 1);
+                    formData.append("past_year", importYear);
+                    formData.append("quarter", importQuarter);
+                    formData.append("region", importRegion);
+
+                    const baseUrl = import.meta.env.VITE_PYTHON_API_URL || 'http://127.0.0.1:8000';
+                    const mlResponse = await fetch(`${baseUrl}/api/ml/train-predict`, {
+                        method: "POST",
+                        body: formData
+                    });
+                    
+                    if (mlResponse.ok) {
+                        const mlData = await mlResponse.json();
+                        if (mlData.error) {
+                            clearInterval(trainingInterval);
+                            setUploadStatus({
+                                active: true,
+                                current: 0,
+                                total: 0,
+                                status: 'error',
+                                message: mlData.error
+                            });
+                            return; // Stop here, do not show success message
+                        }
+                        
+                        // Immediately fetch updated predictions for the current selected region
+                        if (selectedRegion) {
+                            const predResponse = await fetch(`${baseUrl}/api/ml/predictions?region=${encodeURIComponent(selectedRegion)}`);
+                            const predData = await predResponse.json();
+                            if (predData.success && predData.predictions) {
+                                setPredictions(predData.predictions);
+                            }
+                        }
+                    }
+                } catch (mlErr) {
+                    console.error("Machine Learning training request failed:", mlErr);
+                }
+
+                clearInterval(trainingInterval);
                 setUploadStatus({
                     active: true,
-                    current: total,
-                    total,
+                    current: 100,
+                    total: 100,
                     status: 'success',
                     message: `${importRegion} region data uploaded successfully`
                 });
                 loadData();
+                setTimeout(() => {
+                    setUploadStatus(prev => ({ ...prev, active: false }));
+                }, 3000);
             } catch (err) {
                 console.error("Import Error:", err);
                 setUploadStatus({
@@ -542,23 +679,23 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
     // --- STYLES FOR GHOST INPUTS ---
     const ghostInputStyle = styles.ghostInput;
 
-    const InflationDrawer = () => {
-        if (!selectedResource) return null;
-        const history = (selectedResource.rateHistory || []).sort((a, b) => new Date(a.date) - new Date(b.date));
+    const InflationDrawer = ({ open, onClose, resource, formatCurrency }) => {
+        if (!resource) return null;
+        const history = (resource.rateHistory || []).sort((a, b) => new Date(a.date) - new Date(b.date));
         const latest = history.length > 0 ? history[history.length - 1].rate : 0;
         const oldest = history.length > 0 ? history[0].rate : 0;
         const trend = oldest > 0 ? ((latest - oldest) / oldest) * 100 : 0;
         const drawerStyles = getInflationDrawerStyles(theme, trend);
 
         return (
-            <Drawer anchor="right" open={!!selectedResource} onClose={() => setSelectedResource(null)} PaperProps={{ sx: { bgcolor: 'background.default', backgroundImage: 'none' } }}>
+            <Drawer anchor="right" open={open} onClose={onClose} PaperProps={{ sx: { bgcolor: 'background.default', backgroundImage: 'none' } }}>
                 <Box sx={drawerStyles.drawerBox}>
                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
                         <Typography variant="h6" sx={drawerStyles.drawerHeader}>MARKET_ANALYTICS</Typography>
-                        <IconButton onClick={() => setSelectedResource(null)} color="inherit"><CloseIcon /></IconButton>
+                        <IconButton onClick={onClose} color="inherit"><CloseIcon /></IconButton>
                     </Box>
-                    <Typography variant="h5" fontWeight="bold" color="primary.main" sx={drawerStyles.drawerTitle}>{selectedResource.description}</Typography>
-                    <Typography variant="caption" sx={drawerStyles.drawerSubtitle}>CODE: {selectedResource.code}</Typography>
+                    <Typography variant="h5" fontWeight="bold" color="primary.main" sx={drawerStyles.drawerTitle}>{resource.description}</Typography>
+                    <Typography variant="caption" sx={drawerStyles.drawerSubtitle}>CODE: {resource.code}</Typography>
 
                     <Box display="flex" gap={2} my={4} flexDirection={{ xs: 'column', sm: 'row' }}>
                         <Paper elevation={0} sx={drawerStyles.paper1}>
@@ -594,6 +731,8 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
         <ResourceRow
             key={res.id}
             res={res}
+            aiPrediction={predictions[(res.description || "").trim()]}
+            predictionsLoading={predictionsLoading}
             index={index}
             currentPage={currentPage}
             itemsPerPage={itemsPerPage}
@@ -601,11 +740,12 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
             handleSaveRate={handleSaveRate}
             handleOpenBrandModal={handleOpenBrandModal}
             handleOpenBrandChart={handleOpenBrandChart}
+            handleOpenAIPredictionModal={handleOpenAIPredictionModal}
             openDeleteResourceModal={openDeleteResourceModal}
             ghostInputStyle={ghostInputStyle}
             theme={theme}
         />
-    )), [currentPage, openDeleteResourceModal, paginatedResources, theme, handleOpenBrandModal, handleOpenBrandChart, selectedRegion, ghostInputStyle, itemsPerPage, handleSaveRate]);
+    )), [currentPage, openDeleteResourceModal, paginatedResources, theme, handleOpenBrandModal, handleOpenBrandChart, handleOpenAIPredictionModal, selectedRegion, ghostInputStyle, itemsPerPage, handleSaveRate, predictions]);
 
     return (
         <Box>
@@ -614,18 +754,72 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                 <Grid item xs={12} md={6}>
                     <Paper elevation={0} sx={styles.paperCard}>
                         <Typography variant="subtitle2" mb={2} color="text.secondary" sx={styles.monoSubtitle}>// IMPORT_EXCEL_LMR</Typography>
-                        <Box display="flex" gap={2} flexDirection={{ xs: 'column', sm: 'row' }}>
-                            <TextField select fullWidth size="small" label="TARGET REGION" value={importRegion} onChange={e => setImportRegion(e.target.value)}>
-                                {regions.map(r => <MenuItem key={r.id} value={r.name}>{r.name}</MenuItem>)}
-                            </TextField>
-                            <input type="file" accept=".xlsx, .xls, .csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
-                            <Button variant="outlined" color="primary" startIcon={<UploadIcon />} disabled={!importRegion} onClick={() => fileInputRef.current.click()} sx={styles.actionButton}>
-                                UPLOAD_DATA
-                            </Button>
-                            <Button variant="outlined" color="secondary" startIcon={<DownloadIcon />} onClick={downloadTemplate} sx={styles.actionButton}>
-                                DOWNLOAD_TEMPLATE
-                            </Button>
-                        </Box>
+                        <Grid container spacing={2} alignItems="center">
+                            <Grid item xs={12} sm={4}>
+                                <TextField select fullWidth size="small" label="TARGET REGION" value={importRegion} onChange={e => setImportRegion(e.target.value)}
+                                    SelectProps={{
+                                        MenuProps: {
+                                            PaperProps: {
+                                                sx: {
+                                                    bgcolor: '#0a101d', backgroundImage: 'none', border: '1px solid rgba(0,229,255,0.2)',
+                                                    '& .MuiMenuItem-root': { fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }
+                                                }
+                                            }
+                                        }
+                                    }}>
+                                    {regions.map(r => <MenuItem key={r.id} value={r.name}>{r.name}</MenuItem>)}
+                                </TextField>
+                            </Grid>
+                            <Grid item xs={6} sm={4}>
+                                <TextField select fullWidth size="small" label="YEAR" value={importYear} onChange={e => setImportYear(e.target.value)}
+                                    SelectProps={{
+                                        MenuProps: {
+                                            PaperProps: {
+                                                sx: {
+                                                    bgcolor: '#0a101d', backgroundImage: 'none', border: '1px solid rgba(0,229,255,0.2)',
+                                                    '& .MuiMenuItem-root': { fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }
+                                                }
+                                            }
+                                        }
+                                    }}>
+                                    {Array.from({ length: 6 }, (_, i) => currentYear - 5 + i).map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}
+                                </TextField>
+                            </Grid>
+                            <Grid item xs={6} sm={4}>
+                                <TextField select fullWidth size="small" label="QUARTER" value={importQuarter} onChange={e => setImportQuarter(e.target.value)}
+                                    SelectProps={{
+                                        MenuProps: {
+                                            PaperProps: {
+                                                sx: {
+                                                    bgcolor: '#0a101d', backgroundImage: 'none', border: '1px solid rgba(0,229,255,0.2)',
+                                                    '& .MuiMenuItem-root': { fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }
+                                                }
+                                            }
+                                        }
+                                    }}>
+                                    <MenuItem value="JANMAR" disabled={importYear === currentYear && currentQuarterIndex < 0}>JANMAR</MenuItem>
+                                    <MenuItem value="APRJUN" disabled={importYear === currentYear && currentQuarterIndex < 1}>APRJUN</MenuItem>
+                                    <MenuItem value="JULSEP" disabled={importYear === currentYear && currentQuarterIndex < 2}>JULSEP</MenuItem>
+                                    <MenuItem value="OCTDEC" disabled={importYear === currentYear && currentQuarterIndex < 3}>OCTDEC</MenuItem>
+                                </TextField>
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
+                                <input type="file" accept=".xlsx, .xls, .csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
+                                <Button fullWidth variant="outlined" color="primary" startIcon={<UploadIcon />} disabled={!importRegion} onClick={() => fileInputRef.current.click()} sx={styles.actionButton}>
+                                    UPLOAD_DATA
+                                </Button>
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
+                                <Button fullWidth variant="outlined" color="secondary" startIcon={<DownloadIcon />} onClick={downloadTemplate} sx={styles.actionButton}>
+                                    DOWNLOAD_TEMPLATE
+                                </Button>
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
+                                <Button fullWidth variant="outlined" color="info" startIcon={<LanguageIcon />} onClick={() => window.open('https://price.kerala.gov.in/price3_pmu/', '_blank')} sx={styles.actionButton}>
+                                    KERALA_PWD
+                                </Button>
+                            </Grid>
+                        </Grid>
                     </Paper>
                 </Grid>
 
@@ -711,6 +905,7 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                                     {selectedRegion.toUpperCase()} RATE
                                 </TableCell>
                             )}
+                            <TableCell sx={{ ...styles.headerCell, color: '#8b5cf6' }}>AI PREDICTION</TableCell>
                             <TableCell align="right" sx={styles.headerCellRight}></TableCell>
                         </TableRow>
                     </TableHead>
@@ -764,6 +959,15 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                 formatCurrency={formatCurrency}
             />
 
+            {/* AI PREDICTION TREND MODAL */}
+            <AIPredictionChartModal
+                open={aiPredictionModalOpen}
+                onClose={() => setAiPredictionModalOpen(false)}
+                resource={aiPredictionResource}
+                region={selectedRegion}
+                formatCurrency={formatCurrency}
+            />
+
             {/* --- INTEGRATED DELETE CONFIRMATION MODAL --- */}
             <ConfirmDeleteModal
                 open={deleteConfig.open}
@@ -787,13 +991,11 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                 
                 <Box textAlign="center" sx={styles.uploadBox}>
                     <Typography variant="h6" sx={styles.uploadTitle}>
-                        {uploadStatus.status === 'success' ? "IMPORT SUCCESSFUL" : uploadStatus.status === 'error' ? "IMPORT FAILED" : "IMPORTING_EXCEL_DATA"}
+                        {uploadStatus.status === 'success' ? "IMPORT SUCCESSFUL" : uploadStatus.status === 'error' ? "IMPORT FAILED" : (uploadStatus.title || "IMPORTING_EXCEL_DATA")}
                     </Typography>
                     
                     <Typography variant="body2" sx={styles.uploadSubtitle}>
-                        {uploadStatus.status === 'success' || uploadStatus.status === 'error' 
-                            ? uploadStatus.message 
-                            : `Processing items into [${importRegion}] market...`}
+                        {uploadStatus.message || `Processing items into [${importRegion}] market...`}
                     </Typography>
                     
                     {uploadStatus.status !== 'success' && uploadStatus.status !== 'error' && uploadStatus.total > 0 && (

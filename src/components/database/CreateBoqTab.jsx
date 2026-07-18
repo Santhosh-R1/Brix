@@ -174,9 +174,9 @@ export default function CreateBoqTab({ regions, resources, masterBoqs, loadData,
                 <TextField label="DESCRIPTION" value={boqDesc} onChange={e => setBoqDesc(e.target.value)} sx={styles.descField} InputLabelProps={{ sx: styles.fieldLabel }} InputProps={{ sx: styles.fieldInput }} />
                 <Box display="flex" gap={{ xs: 2, sm: 3 }} flexDirection={{ xs: 'column', sm: 'row' }}>
                     <TextField label="UNIT" value={boqUnit} onChange={e => setBoqUnit(e.target.value)} sx={styles.unitField} InputLabelProps={{ sx: styles.fieldLabel }} InputProps={{ sx: styles.fieldInput }} />
-                    <TextField select label="REGION" value={previewRegion} onChange={e => setPreviewRegion(e.target.value)} sx={styles.regionField} InputLabelProps={{ sx: styles.fieldLabel }} InputProps={{ sx: styles.fieldInput }}>
+                    {/* <TextField select label="REGION" value={previewRegion} onChange={e => setPreviewRegion(e.target.value)} sx={styles.regionField} InputLabelProps={{ sx: styles.fieldLabel }} InputProps={{ sx: styles.fieldInput }}>
                         {regions.map(r => <MenuItem key={r.id} value={r.name}>{r.name}</MenuItem>)}
-                    </TextField>
+                    </TextField> */}
                 </Box>
             </Box>
 

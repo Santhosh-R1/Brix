@@ -6,3 +6,7 @@ shapely
 networkx
 python-multipart
 requests
+pandas
+scikit-learn
+openpyxl
+xlrd

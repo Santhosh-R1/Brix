@@ -60,6 +60,16 @@ export function useProjectCalculations(projectBoqItems, masterBoqs, resources, p
         }
     };
 
+    const context = useMemo(() => {
+        const resourceMap = new Map();
+        resources?.forEach(r => resourceMap.set(String(r.id), r));
+        
+        const boqMap = new Map();
+        masterBoqs?.forEach(b => boqMap.set(String(b.id), b));
+        
+        return { resourceMap, boqMap };
+    }, [resources, masterBoqs]);
+
     const { renderedProjectBoq, totalAmount } = useMemo(() => {
         let total = 0;
         const sortedItems = [...projectBoqItems].sort((a, b) => a.slNo - b.slNo);
@@ -75,12 +85,12 @@ export function useProjectCalculations(projectBoqItems, masterBoqs, resources, p
                 displayDesc = item.description || "";
                 displayUnit = item.unit || "";
             } else {
-                masterBoq = masterBoqs.find(m => String(m.id) === String(item.masterBoqId));
+                masterBoq = context.boqMap.get(String(item.masterBoqId));
                 if (masterBoq) {
                     if (project?.isPriceLocked && item.lockedRate !== null && item.lockedRate !== undefined) { 
                         rate = Number(item.lockedRate) || 0; 
                     } else { 
-                        const calculatedRate = calculateMasterBoqRate(masterBoq, resources, masterBoqs, project?.region, new Set(), project);
+                        const calculatedRate = calculateMasterBoqRate(masterBoq, resources, masterBoqs, project?.region, new Set(), project, context);
                         rate = Number(calculatedRate) || Number(item.rate) || 0; 
                     }
                     displayCode = masterBoq.itemCode || "";
@@ -136,17 +146,17 @@ export function useProjectCalculations(projectBoqItems, masterBoqs, resources, p
         }
         
         return { renderedProjectBoq: computedItems, totalAmount: total };
-    }, [projectBoqItems, masterBoqs, resources, project?.region, project?.isPriceLocked]);
+    }, [projectBoqItems, masterBoqs, resources, project?.region, project?.isPriceLocked, context]);
 
     const projectResourceMap = useMemo(() => {
         const map = {};
         renderedProjectBoq.forEach(item => {
             if (item.isCustom) return;
-            const master = masterBoqs.find(m => String(m.id) === String(item.masterBoqId));
+            const master = context.boqMap.get(String(item.masterBoqId));
             if (!master || !master.components) return;
             master.components.forEach(comp => {
                 if (comp.itemType === 'resource') {
-                    const res = resources.find(r => String(r.id) === String(comp.itemId));
+                    const res = context.resourceMap.get(String(comp.itemId));
                     if (!res) return;
                     if (!map[res.id]) map[res.id] = { code: res.code, description: res.description, unit: res.unit, estimatedQty: 0 };
                     
@@ -156,7 +166,7 @@ export function useProjectCalculations(projectBoqItems, masterBoqs, resources, p
             });
         });
         return map;
-    }, [renderedProjectBoq, masterBoqs, resources]);
+    }, [renderedProjectBoq, masterBoqs, resources, context]);
 
     return { renderedProjectBoq, totalAmount, projectResourceMap };
 }

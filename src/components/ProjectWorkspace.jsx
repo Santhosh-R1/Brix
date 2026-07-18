@@ -114,9 +114,9 @@ export default function ProjectWorkspace({ projectId, onBack }) {
     // 🔥 AUTOMATIC DATA FETCHING VIA REACT QUERY
     const { data: rawProject, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
     const { data: regions = [] } = useRegions();
-    const { data: rawResources = [] } = useResources();
-    const { data: rawMasterBoqs = [] } = useMasterBoqs();
-    const { data: rawProjectBoqs = [] } = useProjectBoqs(projectId);
+    const { data: rawResources = [], isLoading: isResourcesLoading } = useResources();
+    const { data: rawMasterBoqs = [], isLoading: isMasterBoqsLoading } = useMasterBoqs();
+    const { data: rawProjectBoqs = [], isLoading: isProjectBoqsLoading } = useProjectBoqs(projectId);
     const { data: crmContacts = [] } = useCrmContacts();
     const { data: orgStaff = [] } = useStaff();
 
@@ -286,6 +286,7 @@ export default function ProjectWorkspace({ projectId, onBack }) {
         // 2. Manual actuals & brands
         let manualActuals = {};
         let selectedBrands = {};
+        let customRates = {};
         let actualRes = project.actualResources;
         if (typeof actualRes === 'string') {
             try { actualRes = JSON.parse(actualRes); } catch { }
@@ -294,6 +295,8 @@ export default function ProjectWorkspace({ projectId, onBack }) {
             Object.entries(actualRes).forEach(([k, v]) => {
                 if (k.startsWith('brand_')) {
                     selectedBrands[k.substring(6)] = v;
+                } else if (k.startsWith('rate_')) {
+                    customRates[k.substring(5)] = Number(v);
                 } else {
                     manualActuals[k] = v;
                 }
@@ -317,7 +320,10 @@ export default function ProjectWorkspace({ projectId, onBack }) {
                         const resourceData = resources.find(r => r.id === resId);
 
                         if (resourceData && !masterBoqCodes.has(resourceData.code)) {
-                            const totalRequired = Number(comp.qty) * Number(item.computedQty || 0);
+                            const ohPercent = Number(item.masterBoq.overhead || 0) / 100;
+                            const profitPercent = Number(item.masterBoq.profit || 0) / 100;
+                            const markupMultiplier = 1 + ohPercent + profitPercent;
+                            const totalRequired = Number(comp.qty) * markupMultiplier * Number(item.computedQty || 0);
 
                             if (!tracker[phase][resId]) {
                                 tracker[phase][resId] = {
@@ -358,13 +364,13 @@ export default function ProjectWorkspace({ projectId, onBack }) {
             }
         });
 
-        return { tracker, selectedBrands };
+        return { tracker, selectedBrands, customRates };
     }, [project, renderedProjectBoq, resources, masterBoqs]);
 
     const handleExportResourceTracker = () => {
-        const { tracker, selectedBrands } = computedResourceTracker;
+        const { tracker, selectedBrands, customRates } = computedResourceTracker;
         const activeRegionName = project?.region || "";
-        exportResourceTrackerPdf(project, tracker, activeRegionName, selectedBrands, getSelectedRate);
+        exportResourceTrackerPdf(project, tracker, activeRegionName, selectedBrands, customRates, getSelectedRate);
     };
 
     const [formulaHelpOpen, setFormulaHelpOpen] = useState(false);
@@ -383,6 +389,28 @@ export default function ProjectWorkspace({ projectId, onBack }) {
         if (willBeLocked) {
             const updates = renderedProjectBoq.map(item => updateProjectBoqMutation.mutateAsync({ id: item.id, projectId, data: { lockedRate: item.rate } }));
             await Promise.all(updates);
+
+            // Freeze Resource Tracker Rates
+            const { tracker, customRates, selectedBrands } = computedResourceTracker;
+            let actualsObj = {};
+            try {
+                if (typeof project.actualResources === 'string') actualsObj = JSON.parse(project.actualResources);
+                else if (project.actualResources) actualsObj = project.actualResources;
+            } catch (e) { }
+
+            Object.entries(tracker).forEach(([phase, resMap]) => {
+                Object.entries(resMap).forEach(([resId, data]) => {
+                    if (customRates[`${phase}_${resId}`] === undefined) {
+                        const resourceObj = data.resourceData;
+                        const selectedBrand = selectedBrands[`${phase}_${resId}`] || "General";
+                        const activeRegionName = project?.region || "";
+                        const baseRate = getSelectedRate(resourceObj, selectedBrand === 'General' ? "" : selectedBrand, activeRegionName);
+                        
+                        actualsObj[`rate_${phase}_${resId}`] = baseRate;
+                    }
+                });
+            });
+            await updateProject('actualResources', JSON.stringify(actualsObj));
         } else {
             const updates = renderedProjectBoq.map(item => updateProjectBoqMutation.mutateAsync({ id: item.id, projectId, data: { lockedRate: null } }));
             await Promise.all(updates);
@@ -419,6 +447,8 @@ export default function ProjectWorkspace({ projectId, onBack }) {
             </Box>
         );
     }, [activeTab, project, regions, resources, totalAmount, renderedProjectBoq, projectResourceMap, crmContacts, orgStaff, projectBoqItems, masterBoqs, editorItem, formulaHelpOpen, exportOpts, projectId]);
+
+    const isCoreDataLoading = isResourcesLoading || isMasterBoqsLoading || isProjectBoqsLoading;
 
     if (isProjectLoading) {
         return (
@@ -563,15 +593,30 @@ export default function ProjectWorkspace({ projectId, onBack }) {
                             <Button variant="outlined" color="error" startIcon={<PictureAsPdfIcon />} onClick={handleExportResourceTracker} sx={{ borderRadius: 50, fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', height: '32px' }}>
                                 RESOURCE TRACKER
                             </Button>
-                            <Button variant="contained" color="success" startIcon={<DownloadIcon />} onClick={() => exportProjectExcel(project, renderedProjectBoq, masterBoqs, resources)} disableElevation sx={{ borderRadius: 50, fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', height: '32px' }}>
+                            {/* <Button variant="contained" color="success" startIcon={<DownloadIcon />} onClick={() => exportProjectExcel(project, renderedProjectBoq, masterBoqs, resources)} disableElevation sx={{ borderRadius: 50, fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', height: '32px' }}>
                                 EXCEL
-                            </Button>
+                            </Button> */}
                         </Box>
                     )}
                 </Box>
 
-                {/* 🔥 MEMOIZED TAB RENDERING */}
-                {ActiveTabContent}
+                {/* 🔥 MEMOIZED TAB RENDERING OR LOADING STATE */}
+                {isCoreDataLoading ? (
+                    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {/* Top KPI Cards Skeleton */}
+                        <Grid container spacing={2}>
+                            {[1, 2, 3, 4, 5, 6].map(i => (
+                                <Grid item xs={6} md={4} lg={2} key={i}>
+                                    <Skeleton variant="rounded" height={90} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
+                                </Grid>
+                            ))}
+                        </Grid>
+                        {/* Details Skeleton */}
+                        <Skeleton variant="rounded" height={400} sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
+                    </Box>
+                ) : (
+                    ActiveTabContent
+                )}
 
             </Box>
 

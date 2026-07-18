@@ -6,6 +6,7 @@ import UploadIcon from '@mui/icons-material/Upload';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import LanguageIcon from '@mui/icons-material/Language';
 import * as XLSX from "xlsx";
 import AddCategoryModal from "./AddCategoryModal";
 import ConfirmDeleteCategoryModal from "./ConfirmDeleteCategoryModal";
@@ -636,6 +637,16 @@ export default function ViewBoqTab({ masterBoqs, regions, resources, onEditBoq, 
             <Box display="flex" flexDirection="column" gap={2} sx={styles.subContainer}>
                 {/* Top Row: Template and Import Excel Buttons on the right side */}
                 <Box display="flex" gap={2} alignItems="center" justifyContent="flex-end">
+                    <Button 
+                        size="small" 
+                        variant="outlined" 
+                        color="info" 
+                        startIcon={<LanguageIcon />} 
+                        onClick={() => window.open("https://price.kerala.gov.in/price3_pmu/call_databook_home.htm", "_blank")} 
+                        sx={styles.actionButton}
+                    >
+                        KERALA_PWD
+                    </Button>
                     <Button size="small" variant="outlined" startIcon={<DownloadIcon />} onClick={generateDatabookTemplate} sx={styles.actionButton}>TEMPLATE</Button>
                     <input type="file" accept=".xls,.xlsx" ref={excelInputRef} style={{ display: 'none' }} onChange={(e) => { handleDatabookExcelUpload(e); excelInputRef.current.value = null; }} />
                     <input type="file" accept=".pdf" ref={pdfInputRef} style={{ display: 'none' }} onChange={(e) => { handlePdfUpload(e); pdfInputRef.current.value = null; }} />

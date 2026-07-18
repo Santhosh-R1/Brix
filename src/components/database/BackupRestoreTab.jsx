@@ -31,7 +31,7 @@ export default function BackupRestoreTab({ loadData }) {
             const dateStr = new Date().toISOString().split('T')[0];
             const link = document.createElement('a');
             link.href = `data:application/octet-stream;base64,${res}`;
-            link.download = `OpenPrix_Master_Backup_${dateStr}.sqlite`;
+            link.download = `OpenPrix_Master_Backup_${dateStr}.backup`;
 
             document.body.appendChild(link);
             link.click();
@@ -43,6 +43,27 @@ export default function BackupRestoreTab({ loadData }) {
         }
     };
 
+    const handleExportTrainingData = async () => {
+        try {
+            const pythonApi = import.meta.env.VITE_PYTHON_API_URL || 'http://localhost:8000';
+            const res = await fetch(`${pythonApi}/api/ml/export-training-data`);
+            
+            if (!res.ok) throw new Error(`Server returned ${res.status}`);
+            
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "market_training_data.csv";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (e) {
+            showMessage("Export Error", "Export error: " + e.message);
+        }
+    };
+
     const handleRestore = async (mode) => {
         setIsRestoreOpen(false);
 
@@ -51,7 +72,7 @@ export default function BackupRestoreTab({ loadData }) {
         }
 
         try {
-            const fileResult = await window.api.os.pickFile(".sqlite");
+            const fileResult = await window.api.os.pickFile(".backup");
             if (!fileResult) return;
 
             let base64Data = "";
@@ -90,11 +111,11 @@ export default function BackupRestoreTab({ loadData }) {
     return (
         <Box sx={styles.mainBox}>
             <Alert severity="info" sx={styles.alertBox}>
-                <strong>MASTER_DATABASE_FILE (.sqlite)</strong> — Regions, Resources, Databook Items, and Projects.
+                <strong>MASTER_DATABASE_FILE (.backup)</strong> — Regions, Resources, Databook Items, and Projects.
                 This handles your entire core database. Store this file securely as a backup!
             </Alert>
             <Grid container spacing={4}>
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={4}>
                     <Paper elevation={0} variant="outlined" sx={styles.backupPaper}>
                         <CloudDownloadIcon sx={styles.backupIcon} />
                         <Typography variant="h6" gutterBottom sx={styles.cardTitle}>EXPORT_DB</Typography>
@@ -104,13 +125,23 @@ export default function BackupRestoreTab({ loadData }) {
                         </Button>
                     </Paper>
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={4}>
                     <Paper elevation={0} variant="outlined" sx={styles.restorePaper}>
                         <CloudUploadIcon sx={styles.restoreIcon} />
                         <Typography variant="h6" color="error.main" gutterBottom sx={styles.cardTitle}>RESTORE_DB</Typography>
                         <Typography variant="body2" color="text.secondary" paragraph>Select a backup .sqlite file to import Master Data.</Typography>
                         <Button variant="outlined" color="error" size="large" onClick={() => setIsRestoreOpen(true)} sx={styles.restoreBtn}>
                             RESTORE MASTER DATA
+                        </Button>
+                    </Paper>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                    <Paper elevation={0} variant="outlined" sx={{...styles.backupPaper, borderColor: 'primary.light', bgcolor: 'rgba(13, 31, 60, 0.3)'}}>
+                        <CloudDownloadIcon sx={{...styles.backupIcon, color: 'primary.light'}} />
+                        <Typography variant="h6" gutterBottom sx={styles.cardTitle}>EXPORT_ML_DATA</Typography>
+                        <Typography variant="body2" color="text.secondary" paragraph>Download the raw market training dataset (CSV).</Typography>
+                        <Button variant="outlined" color="primary" disableElevation size="large" onClick={handleExportTrainingData} sx={styles.backupBtn}>
+                            DOWNLOAD CSV
                         </Button>
                     </Paper>
                 </Grid>

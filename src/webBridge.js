@@ -165,7 +165,7 @@ const osNetworkCalls = {
             osNetworkCalls.sendNotification("Download Started", `Fetching ${fileName}...`);
 
             try {
-                const res = await fetch(`${SERVER_URL}/api/os/download?path=${encodedPath}`, {
+                const res = await fetch(`${SERVER_URL}/api/os/download?path=${encodedPath}&token=${encodeURIComponent(token || '')}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 

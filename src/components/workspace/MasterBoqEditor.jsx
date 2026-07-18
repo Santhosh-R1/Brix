@@ -6,6 +6,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { tableInputActiveStyle } from "../../styles";
+import ConfirmDeleteModal from "../database/ConfirmDeleteModal";
 
 import { useSettings } from "../../context/SettingsContext";
 
@@ -28,8 +29,10 @@ export default function MasterBoqEditor({ editorItem, onClose, onSaveSuccess, pr
     const [editPreviewRegion, setEditPreviewRegion] = useState("");
     const [editBoqRows, setEditBoqRows] = useState([]);
     const [focusedQtyId, setFocusedQtyId] = useState(null);
-
     const [localRows, setLocalRows] = useState({});
+    
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [rowToDelete, setRowToDelete] = useState(null);
 
     useEffect(() => {
         if (!editorItem) return;
@@ -101,6 +104,19 @@ export default function MasterBoqEditor({ editorItem, onClose, onSaveSuccess, pr
     const addEditSpreadsheetRow = () => setEditBoqRows([...editBoqRows, { id: crypto.randomUUID(), itemType: "resource", itemId: "", formulaStr: "1", qty: 1 }]);
     const updateEditSpreadsheetRow = (id, field, value) => setEditBoqRows(editBoqRows.map(row => row.id === id ? { ...row, [field]: value, ...(field === 'itemType' ? { itemId: "", tempCode: undefined, tempDesc: undefined } : {}) } : row));
     const removeEditSpreadsheetRow = (id) => setEditBoqRows(editBoqRows.filter(row => row.id !== id));
+
+    const handleDeleteClick = (row) => {
+        setRowToDelete(row);
+        setDeleteModalOpen(true);
+    };
+
+    const confirmDeleteRow = () => {
+        if (rowToDelete) {
+            removeEditSpreadsheetRow(rowToDelete.id);
+            setDeleteModalOpen(false);
+            setRowToDelete(null);
+        }
+    };
 
     const saveEditedCustomBoq = async () => {
         if (!editCustomDesc || !editCustomRate) { alert("Description and Rate are required."); return; }
@@ -276,7 +292,7 @@ export default function MasterBoqEditor({ editorItem, onClose, onSaveSuccess, pr
 
                                                 <TableCell color="text.secondary" sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '13px' }}>{formatCurrency(row.rate)}</TableCell>
                                                 <TableCell sx={{ fontWeight: 'bold', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px' }}>{formatCurrency(row.amount)}</TableCell>
-                                                <TableCell align="center"><IconButton size="small" color="error" onClick={() => removeEditSpreadsheetRow(row.id)}><DeleteIcon fontSize="small" /></IconButton></TableCell>
+                                                <TableCell align="center"><IconButton size="small" color="error" onClick={() => handleDeleteClick(row)}><DeleteIcon fontSize="small" /></IconButton></TableCell>
                                             </TableRow>
                                         )
                                     })}
@@ -332,14 +348,21 @@ export default function MasterBoqEditor({ editorItem, onClose, onSaveSuccess, pr
                         <Button variant="contained" color="success" onClick={saveEditedCustomBoq} startIcon={<SaveIcon />} fullWidth>SAVE</Button>
                     ) : editorItem.masterBoqId ? (
                         <>
-                            <Button variant="outlined" color="info" onClick={() => saveEditedMasterBoq(true)} fullWidth>SAVE_AS_NEW</Button>
-                            <Button variant="contained" color="success" onClick={() => saveEditedMasterBoq(false)} startIcon={<SaveIcon />} fullWidth>UPDATE_ORIGINAL</Button>
+                            <Button variant="contained" color="info" onClick={() => saveEditedMasterBoq(true)} sx={{ width: { xs: '100%', sm: 'auto' } }}>SAVE_AS_NEW</Button>
+                            <Button variant="contained" color="success" onClick={() => saveEditedMasterBoq(false)} startIcon={<SaveIcon />} sx={{ width: { xs: '100%', sm: 'auto' } }}>UPDATE_ORIGINAL</Button>
                         </>
                     ) : (
                         <Button variant="contained" color="success" onClick={() => saveEditedMasterBoq(true)} startIcon={<SaveIcon />} fullWidth>SAVE_TO_MASTER_DB</Button>
                     )}
                 </Box>
             </DialogActions>
+
+            <ConfirmDeleteModal
+                open={deleteModalOpen}
+                onClose={() => setDeleteModalOpen(false)}
+                onConfirm={confirmDeleteRow}
+                itemName={rowToDelete?.tempDesc || rowToDelete?.description || "this component"}
+            />
         </Dialog>
     );
 }

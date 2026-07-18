@@ -14,9 +14,19 @@ export function getSelectedRate(resource, brandName, regionName) {
             if (Array.isArray(monthData)) {
                 const brandData = monthData.find(b => b.brand === brandName);
                 if (brandData) {
-                    if (regionName && brandData[regionName] !== undefined && brandData[regionName] !== "") {
-                        const rate = Number(brandData[regionName]);
-                        if (rate > 0) return rate;
+                    if (regionName) {
+                        if (brandData[regionName] !== undefined && brandData[regionName] !== "") {
+                            const rate = Number(brandData[regionName]);
+                            if (rate > 0) return rate;
+                        }
+                        const normalizedRegion = String(regionName).toLowerCase().trim();
+                        for (const [key, value] of Object.entries(brandData)) {
+                            if (key !== 'brand' && String(key).toLowerCase().trim() === normalizedRegion) {
+                                const rate = Number(value);
+                                if (rate > 0) return rate;
+                            }
+                        }
+                        return 0; // Prevent fallback to other regions
                     }
                     const availableBrandRates = Object.entries(brandData)
                         .filter(([k, v]) => k !== 'brand' && !isNaN(Number(v)) && Number(v) > 0)
@@ -56,7 +66,9 @@ export function getResourceRate(resource, regionName) {
         }
     }
 
-    // Ultimate Fallback: Return the first available price
+    if (regionName) return 0; // Prevent fallback to other regions if a specific region was requested
+
+    // Ultimate Fallback: Return the first available price (only if no region was requested)
     const availableRates = Object.values(ratesObj)
         .map(r => Number(r))
         .filter(r => !isNaN(r) && r > 0);
@@ -65,7 +77,7 @@ export function getResourceRate(resource, regionName) {
 }
 
 // 🔥 UPGRADED: Now processes formulas chronologically like the UI Editor!
-export function calculateMasterBoqRate(masterBoq, allResources, allMasterBoqs, regionName, visited = new Set(), project = null) {
+export function calculateMasterBoqRate(masterBoq, allResources, allMasterBoqs, regionName, visited = new Set(), project = null, context = null) {
     if (!masterBoq || !masterBoq.components) return 0;
 
     let components = masterBoq.components;
@@ -80,6 +92,7 @@ export function calculateMasterBoqRate(masterBoq, allResources, allMasterBoqs, r
 
     // Extract selected brands from project actualResources
     let selectedBrands = {};
+    let customRates = {};
     if (project) {
         let actualRes = project.actualResources;
         if (typeof actualRes === 'string') {
@@ -88,10 +101,13 @@ export function calculateMasterBoqRate(masterBoq, allResources, allMasterBoqs, r
         if (actualRes) {
             Object.entries(actualRes).forEach(([k, v]) => {
                 if (k.startsWith('brand_')) {
-                    // key is brand_phase_resourceId, let's extract the resourceId suffix
                     const parts = k.substring(6).split('_');
                     const resourceId = parts[parts.length - 1];
                     selectedBrands[resourceId] = v;
+                } else if (k.startsWith('rate_')) {
+                    const parts = k.substring(5).split('_');
+                    const resourceId = parts[parts.length - 1];
+                    customRates[resourceId] = Number(v);
                 }
             });
         }
@@ -133,12 +149,16 @@ export function calculateMasterBoqRate(masterBoq, allResources, allMasterBoqs, r
         if (computedQty !== 0) {
             let rate = 0;
             if (comp.itemType === 'resource') {
-                const resource = allResources.find(r => String(r.id) === String(comp.itemId));
-                const brandName = resource ? selectedBrands[resource.id] : null;
-                rate = getSelectedRate(resource, brandName, regionName);
+                const resource = context?.resourceMap ? context.resourceMap.get(String(comp.itemId)) : allResources.find(r => String(r.id) === String(comp.itemId));
+                if (resource && customRates[resource.id] !== undefined) {
+                    rate = customRates[resource.id];
+                } else {
+                    const brandName = resource ? selectedBrands[resource.id] : null;
+                    rate = getSelectedRate(resource, brandName, regionName);
+                }
             } else if (comp.itemType === 'boq') {
-                const nestedBoq = allMasterBoqs.find(b => String(b.id) === String(comp.itemId));
-                rate = calculateMasterBoqRate(nestedBoq, allResources, allMasterBoqs, regionName, new Set(visited), project);
+                const nestedBoq = context?.boqMap ? context.boqMap.get(String(comp.itemId)) : allMasterBoqs.find(b => String(b.id) === String(comp.itemId));
+                rate = calculateMasterBoqRate(nestedBoq, allResources, allMasterBoqs, regionName, new Set(visited), project, context);
             }
 
             const amount = computedQty * rate;
