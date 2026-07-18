@@ -996,14 +996,19 @@ async def train_predict_ml(
         else:
             months = [1, 2, 3]
             
-        # Only save exact excel data given (use the first month of the quarter to represent the data)
-        new_data = pd.DataFrame({
-            'Year': past_year,
-            'Month': months[0],
-            'Region': region,
-            'Resource': df['Description'],
-            'Rate': pd.to_numeric(df['Lmr Rate (₹)'], errors='coerce')
-        })
+        # Standardize the incoming data for all 3 months of the quarter
+        dfs = []
+        for m in months:
+            m_df = pd.DataFrame({
+                'Year': past_year,
+                'Month': m,
+                'Region': region,
+                'Resource': df['Description'],
+                'Rate': pd.to_numeric(df['Lmr Rate (₹)'], errors='coerce')
+            })
+            dfs.append(m_df)
+            
+        new_data = pd.concat(dfs, ignore_index=True)
         
         # Drop invalid rows
         new_data = new_data.dropna(subset=['Resource', 'Rate'])
