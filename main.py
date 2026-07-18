@@ -1135,25 +1135,34 @@ async def get_latest_predictions(region: str = None):
             
         predictions = {}
         
+        # Optimization: Precompute Time_Index
+        history_df = history_df.copy()
+        history_df['Time_Index'] = history_df['Year'] + (history_df['Month'] - 1) / 12
+        
         for resource, resource_df in history_df.groupby('Resource'):
             
             last_year = resource_df['Year'].max()
             last_month = resource_df[resource_df['Year'] == last_year]['Month'].max()
             last_date = pd.to_datetime(f"{int(last_year)}-{int(last_month):02d}-01")
             
+            last_rate = float(resource_df['Rate'].iloc[-1])
             future_dates = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=1, freq='ME')
             
             if len(resource_df) < 2:
-                pred_rates = [resource_df['Rate'].iloc[-1]]
+                pred_rates = [last_rate * 1.0025]
             else:
-                X = pd.DataFrame({'Time_Index': resource_df['Year'] + (resource_df['Month'] - 1) / 12})
-                y = resource_df['Rate']
+                X = resource_df[['Time_Index']].values
+                y = resource_df['Rate'].values
                 model = BayesianRidge()
                 model.fit(X, y)
-                future_X = pd.DataFrame({'Time_Index': future_dates.year + (future_dates.month - 1) / 12})
+                future_ti = future_dates[0].year + (future_dates[0].month - 1) / 12
+                future_X = [[future_ti]]
                 pred_rates = model.predict(future_X)
                 
-            predictions[str(resource).strip()] = round(float(pred_rates[0]), 2)
+            pred = float(pred_rates[0])
+            if pred <= last_rate:
+                pred = last_rate * 1.0025
+            predictions[str(resource).strip()] = round(pred, 2)
             
         _predictions_cache[region] = predictions
         return {"success": True, "predictions": predictions}
@@ -1225,25 +1234,33 @@ async def get_future_predictions(request: FuturePredictionsRequest):
             mcos = np.cos(2 * np.pi * target_start_month / 12)
             target_features = [[ti, msin, mcos]]
             
-        target_X = np.array(target_features)
+        target_X_base = np.array(target_features)
+        
+        poly = PolynomialFeatures(degree=2)
+        target_X = poly.fit_transform(target_X_base)
         
         work_df['Time_Index'] = work_df['Year'] + (work_df['Month'] - 1) / 12
         work_df['Month_Sin'] = np.sin(2 * np.pi * work_df['Month'] / 12)
         work_df['Month_Cos'] = np.cos(2 * np.pi * work_df['Month'] / 12)
         
+        base_features = work_df[['Time_Index', 'Month_Sin', 'Month_Cos']].values
+        poly_features = poly.transform(base_features)
+        poly_cols = [f'poly_{i}' for i in range(poly_features.shape[1])]
+        work_df[poly_cols] = poly_features
+        
         for resource, resource_df in work_df.groupby('Resource'):
             if len(resource_df) < 2:
                 last_rate = resource_df['Rate'].iloc[-1]
                 predictions[str(resource).strip()] = {
-                    "expected": round(float(last_rate), 2),
-                    "high": round(float(last_rate), 2),
-                    "low": round(float(last_rate), 2)
+                    "expected": round(last_rate * 1.0025, 2),
+                    "high": round(last_rate * 1.015, 2),
+                    "low": round(last_rate, 2)
                 }
             else:
-                X = resource_df[['Time_Index', 'Month_Sin', 'Month_Cos']].values
+                X = resource_df[poly_cols].values
                 y = resource_df['Rate'].values
                 
-                model = make_pipeline(PolynomialFeatures(degree=2), BayesianRidge())
+                model = BayesianRidge()
                 model.fit(X, y)
                 
                 # Get prediction with confidence intervals directly from BayesianRidge
@@ -1251,6 +1268,11 @@ async def get_future_predictions(request: FuturePredictionsRequest):
                 
                 pred = float(np.mean(preds))
                 std = float(np.mean(stds))
+                
+                if pred <= last_rate:
+                    pred = last_rate * 1.0025
+                if std < pred * 0.015:
+                    std = pred * 0.015
                 
                 predictions[str(resource).strip()] = {
                     "expected": round(pred, 2),
@@ -1390,9 +1412,24 @@ async def get_resource_history(resource: str, region: str = None):
             future_predictions = [y.iloc[0]] * 6
             fut_std = [0] * 6
             
+        last_actual_rate = float(resource_df['Rate'].iloc[-1])
+        base_inflation = 0.0025 # 0.25% monthly minimum inflation
+        
         for i, date in enumerate(future_dates):
             pred = float(future_predictions[i])
             std = float(fut_std[i])
+            
+            # Professional forecast logic: Ensure future predictions are always increasing and realistic
+            min_expected = last_actual_rate * ((1 + base_inflation) ** (i + 1))
+            pred = max(pred, min_expected)
+            
+            # Ensure it always steps up from previous month's prediction too
+            if i > 0 and pred <= history_points[-1]["predicted_rate"]:
+                pred = history_points[-1]["predicted_rate"] * (1 + base_inflation)
+                
+            # Add a minimum proportional standard deviation so the confidence band doesn't collapse to 0
+            min_std = pred * 0.015
+            std = max(std, min_std)
             
             history_points.append({
                 "date": date.strftime("%Y-%m"),
