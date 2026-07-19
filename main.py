@@ -1145,7 +1145,10 @@ async def get_latest_predictions(region: str = None):
                 future_X = pd.DataFrame({'Time_Index': future_dates.year + (future_dates.month - 1) / 12})
                 pred_rates = model.predict(future_X)
                 
-            predictions[str(resource).strip()] = round(float(pred_rates[0]), 2)
+            predictions[str(resource).strip()] = {
+                "predicted_rate": round(float(pred_rates[0]), 2),
+                "actual_rate": float(resource_df['Rate'].iloc[-1])
+            }
             
         _predictions_cache[region] = predictions
         return {"success": True, "predictions": predictions}
