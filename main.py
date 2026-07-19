@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, Form, File
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
@@ -1263,6 +1264,14 @@ async def get_future_predictions(request: FuturePredictionsRequest):
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
+
+@app.get("/api/ml/export-training-data")
+async def export_training_data():
+    file_path = os.path.join(os.path.dirname(__file__), "core", "market_training_data.csv")
+    if not os.path.exists(file_path):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Training data file not found")
+    return FileResponse(path=file_path, filename="market_training_data.csv", media_type="text/csv")
 
 class LocalRate(BaseModel):
     resource: str
