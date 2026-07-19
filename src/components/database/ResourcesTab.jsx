@@ -55,16 +55,19 @@ const SearchInput = memo(({ value, onChange }) => {
 });
 
 // 🔥 UPGRADED HIGH-PERFORMANCE "GHOST" INPUT CELL
-const RateInputCell = memo(({ resource, regionName, onSave, ghostInputStyle }) => {
-    const [localVal, setLocalVal] = useState(resource.rates[regionName] || "");
+const RateInputCell = memo(({ resource, regionName, actualRate, onSave, ghostInputStyle }) => {
+    // If the ML backend provides an actualRate (which is considered the source of truth for "accurate latest region wise rate"),
+    // use it. Otherwise fallback to the local DB rate.
+    const effectiveRate = (actualRate !== undefined && actualRate !== null) ? actualRate : resource.rates[regionName];
+    const [localVal, setLocalVal] = useState(effectiveRate || "");
 
     useEffect(() => {
-        setLocalVal(resource.rates[regionName] || "");
-    }, [resource.rates, regionName]);
+        setLocalVal(effectiveRate || "");
+    }, [effectiveRate]);
 
     const handleBlur = () => {
         const numVal = Number(localVal);
-        const currentDbVal = Number(resource.rates[regionName] || 0);
+        const currentDbVal = Number(effectiveRate || 0);
         if (numVal !== currentDbVal) {
             onSave(resource.id, numVal);
         }
@@ -90,6 +93,7 @@ const RateInputCell = memo(({ resource, regionName, onSave, ghostInputStyle }) =
 const ResourceRow = memo(({
     res,
     aiPrediction,
+    actualRate,
     predictionsLoading,
     index,
     currentPage,
@@ -123,6 +127,7 @@ const ResourceRow = memo(({
                     <RateInputCell
                         resource={res}
                         regionName={selectedRegion}
+                        actualRate={actualRate}
                         onSave={handleSaveRate}
                         ghostInputStyle={ghostInputStyle}
                     />
@@ -296,7 +301,7 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
     const filteredResources = useMemo(() => {
         const masterBoqCodes = new Set(masterBoqs.map(b => b.itemCode).filter(Boolean));
         const normalizedSearch = !searchTerm || searchTerm.trim() === "" ? "" : deferredSearchTerm.toLowerCase();
-        const filtered = resources.filter(r => {
+        let filtered = resources.filter(r => {
             // Do not show master databook data (assemblies that exist in masterBoqs)
             if (r.code && masterBoqCodes.has(r.code)) return false;
 
@@ -318,6 +323,19 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
             }
             return true;
         });
+
+        // Deduplicate: Keep only the latest entry if there are duplicate codes/descriptions
+        const uniqueFiltered = [];
+        const seenKeys = new Set();
+        for (let i = filtered.length - 1; i >= 0; i--) {
+            const r = filtered[i];
+            const key = (r.code || r.description || String(r.id)).toLowerCase().trim();
+            if (!seenKeys.has(key)) {
+                seenKeys.add(key);
+                uniqueFiltered.unshift(r);
+            }
+        }
+        filtered = uniqueFiltered;
 
         // Sort by code (natural sort: numeric when possible, fallback to string compare)
         return filtered.sort((a, b) => {
@@ -403,6 +421,27 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
             ];
             await window.api.db.updateResource(id, 'rates', typeof value === 'string' ? value : JSON.stringify(value));
             await window.api.db.updateResource(id, 'rateHistory', JSON.stringify(updatedHistory));
+
+            // Sync the updated rate to the ML database
+            try {
+                if (res && res.description) {
+                    const baseUrl = import.meta.env.VITE_PYTHON_API_URL || 'http://127.0.0.1:8000';
+                    await fetch(`${baseUrl}/api/ml/train-local-rates`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            rates: [{
+                                resource: res.description.trim(),
+                                rate: Number(value[regionName]),
+                                region: regionName
+                            }]
+                        })
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to sync rate with ML backend:", err);
+            }
+
         } else {
             let finalValue = value;
             if (field === 'rates' && typeof value === 'object') {
@@ -512,7 +551,19 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                     if (code && desc) formattedData.push({ code, description: desc, unit, rate });
                 }
 
-                if (formattedData.length === 0) {
+                // Deduplicate formattedData before processing to prevent inserting duplicate DB records
+                const uniqueFormattedData = [];
+                const seenUploadKeys = new Set();
+                for (let i = formattedData.length - 1; i >= 0; i--) {
+                    const item = formattedData[i];
+                    const key = item.code.toLowerCase().trim();
+                    if (!seenUploadKeys.has(key)) {
+                        seenUploadKeys.add(key);
+                        uniqueFormattedData.unshift(item);
+                    }
+                }
+
+                if (uniqueFormattedData.length === 0) {
                     setUploadStatus({
                         active: true,
                         current: 0,
@@ -523,10 +574,10 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                     return;
                 }
 
-                const total = formattedData.length;
+                const total = uniqueFormattedData.length;
                 setUploadStatus({ active: true, current: 0, total, status: 'loading', message: "Parsing Excel file..." });
 
-                const bulkPayload = formattedData.map(item => {
+                const bulkPayload = uniqueFormattedData.map(item => {
                     let existingRes = resources.find(r => r.code === item.code);
                     if (existingRes) {
                         const newRates = { ...existingRes.rates, [importRegion]: item.rate };
@@ -727,25 +778,35 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
         );
     };
 
-    const resourceRows = useMemo(() => paginatedResources.map((res, index) => (
-        <ResourceRow
-            key={res.id}
-            res={res}
-            aiPrediction={predictions[(res.description || "").trim()]}
-            predictionsLoading={predictionsLoading}
-            index={index}
-            currentPage={currentPage}
-            itemsPerPage={itemsPerPage}
-            selectedRegion={selectedRegion}
-            handleSaveRate={handleSaveRate}
-            handleOpenBrandModal={handleOpenBrandModal}
-            handleOpenBrandChart={handleOpenBrandChart}
-            handleOpenAIPredictionModal={handleOpenAIPredictionModal}
-            openDeleteResourceModal={openDeleteResourceModal}
-            ghostInputStyle={ghostInputStyle}
-            theme={theme}
-        />
-    )), [currentPage, openDeleteResourceModal, paginatedResources, theme, handleOpenBrandModal, handleOpenBrandChart, handleOpenAIPredictionModal, selectedRegion, ghostInputStyle, itemsPerPage, handleSaveRate, predictions]);
+    const resourceRows = useMemo(() => paginatedResources.map((res, index) => {
+        const aiPrediction = predictions[(res.description || "").trim()]?.predicted_rate;
+        const actualRate = predictions[(res.description || "").trim()]?.actual_rate;
+
+        // Ensure we always use the latest actual rate from ML backend if available, as a fallback to DB state, or overriding it.
+        // The prompt says "show accurate latest region wise rate in rate field" and the modal rate is the correct one.
+        // We will pass the ML actualRate as a prop to RateInputCell, but RateInputCell manages its own state.
+        
+        return (
+            <ResourceRow
+                key={res.id}
+                res={res}
+                aiPrediction={aiPrediction}
+                actualRate={actualRate}
+                predictionsLoading={predictionsLoading}
+                index={index}
+                currentPage={currentPage}
+                itemsPerPage={itemsPerPage}
+                selectedRegion={selectedRegion}
+                handleSaveRate={handleSaveRate}
+                handleOpenBrandModal={handleOpenBrandModal}
+                handleOpenBrandChart={handleOpenBrandChart}
+                handleOpenAIPredictionModal={handleOpenAIPredictionModal}
+                openDeleteResourceModal={openDeleteResourceModal}
+                ghostInputStyle={ghostInputStyle}
+                theme={theme}
+            />
+        );
+    }), [currentPage, openDeleteResourceModal, paginatedResources, theme, handleOpenBrandModal, handleOpenBrandChart, handleOpenAIPredictionModal, selectedRegion, ghostInputStyle, itemsPerPage, handleSaveRate, predictions]);
 
     return (
         <Box>
