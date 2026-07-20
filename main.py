@@ -1303,8 +1303,16 @@ async def get_ai_brand_suggestions(req: AiBrandSuggestionRequest):
     }
     
     try:
-        res = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
-        res.raise_for_status()
+        import time
+        max_retries = 3
+        for attempt in range(max_retries):
+            res = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
+            if res.status_code == 429 and attempt < max_retries - 1:
+                time.sleep(3) # Wait 3 seconds and retry if rate-limited
+                continue
+            res.raise_for_status()
+            break
+            
         data = res.json()
         text_content = data['candidates'][0]['content']['parts'][0]['text']
         
