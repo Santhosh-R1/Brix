@@ -808,6 +808,11 @@ export default function ResourceTrackerTab({ project, renderedProjectBoq, resour
                                                         />
                                                     )}
                                                     className="brand-autocomplete-container"
+                                                    classes={{
+                                                        paper: 'brand-dropdown-paper',
+                                                        listbox: 'brand-dropdown-list',
+                                                        option: 'brand-dropdown-item'
+                                                    }}
                                                 />
                                             </TableCell>
                                             <TableCell>

@@ -129,3 +129,44 @@
 .actual-qty-input.not-predicting {
   padding-right: 4px;
 }
+
+.brand-dropdown-paper {
+    background-color: #0a1122 !important;
+    border: 1px solid rgba(0, 229, 255, 0.3) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7) !important;
+    margin-top: 4px !important;
+    min-width: 220px !important;
+}
+
+.brand-dropdown-list {
+    padding: 0 !important;
+}
+
+.brand-dropdown-item {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 11px !important;
+    color: #e2e8f0 !important;
+    padding: 10px 12px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    line-height: 1.4 !important;
+    transition: all 0.2s ease;
+}
+
+.brand-dropdown-item:last-child {
+    border-bottom: none !important;
+}
+
+.brand-dropdown-item[aria-selected="true"] {
+    background-color: rgba(0, 229, 255, 0.15) !important;
+    color: #00e5ff !important;
+    font-weight: bold !important;
+}
+
+.brand-dropdown-item:hover,
+.brand-dropdown-item[data-focus="true"] {
+    background-color: rgba(0, 229, 255, 0.1) !important;
+    color: #fff !important;
+}
