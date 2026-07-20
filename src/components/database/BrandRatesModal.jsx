@@ -14,7 +14,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 
-const pythonApi = "http://localhost:8000";
+const pythonApi = import.meta.env.VITE_PYTHON_API_URL || "http://localhost:8000";
 
 const getCurrentMonthKey = () => {
     const now = new Date();
