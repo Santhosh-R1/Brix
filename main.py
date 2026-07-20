@@ -1292,7 +1292,7 @@ async def get_ai_brand_suggestions(req: AiBrandSuggestionRequest):
         
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
     
-    prompt = f"Act as an expert construction estimator in {req.region}, Kerala, India. For the material '{req.resource}' (Unit: {req.unit}), provide realistic local market prices strictly in {req.region} for 3 to 5 common brands. Return ONLY a valid JSON array of objects, with exactly two keys: 'brand' (string) and 'price' (number). Ensure prices are realistic in INR."
+    prompt = f"Act as an expert construction estimator in {req.region}, Kerala, India. For the material '{req.resource}', provide realistic local market prices strictly in {req.region} for 3 to 5 common brands. The price MUST be exactly for ONE {req.unit}. Return ONLY a valid JSON array of objects, with exactly two keys: 'brand' (string) and 'price' (number). Ensure prices are realistic in INR for 1 {req.unit}."
     
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -1307,10 +1307,29 @@ async def get_ai_brand_suggestions(req: AiBrandSuggestionRequest):
         res.raise_for_status()
         data = res.json()
         text_content = data['candidates'][0]['content']['parts'][0]['text']
+        
+        # Strip potential markdown formatting (```json ... ```)
+        text_content = text_content.strip()
+        if text_content.startswith('```json'):
+            text_content = text_content[7:]
+        elif text_content.startswith('```'):
+            text_content = text_content[3:]
+        if text_content.endswith('```'):
+            text_content = text_content[:-3]
+        text_content = text_content.strip()
+        
         brands_data = json.loads(text_content)
         return {"success": True, "suggestions": brands_data}
+    except requests.exceptions.HTTPError as e:
+        status = e.response.status_code
+        if status == 503:
+            return {"success": False, "error": "AI Service is temporarily unavailable or busy. Please try again in a few moments."}
+        elif status == 429:
+            return {"success": False, "error": "AI usage limit exceeded. Please try again later or use a different key."}
+        else:
+            return {"success": False, "error": f"AI Engine responded with an error (Code {status})."}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "An unexpected error occurred while communicating with the AI. Please try again."}
 
 
 class LocalRate(BaseModel):

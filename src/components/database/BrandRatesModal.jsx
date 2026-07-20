@@ -346,17 +346,23 @@ export default function BrandRatesModal({ open, onClose, resource, regions, sele
                             + ADD BRAND
                         </Button>
                         <Button
-                            variant="contained"
+                            variant="outlined"
                             disabled={isAiLoading}
-                            startIcon={isAiLoading ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+                            startIcon={isAiLoading ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeIcon />}
                             onClick={handleFetchAiSuggestions}
                             sx={{ 
                                 fontFamily: "'JetBrains Mono', monospace", 
                                 fontSize: '12px',
-                                background: 'linear-gradient(45deg, #FFD700, #FFA500)',
-                                color: '#000',
+                                color: '#00e5ff',
+                                borderColor: 'rgba(0, 229, 255, 0.5)',
+                                background: 'rgba(0, 229, 255, 0.08)',
+                                transition: 'all 0.3s ease',
+                                textShadow: '0 0 5px rgba(0, 229, 255, 0.3)',
                                 '&:hover': {
-                                    background: 'linear-gradient(45deg, #FFA500, #FF8C00)',
+                                    background: 'rgba(0, 229, 255, 0.2)',
+                                    borderColor: '#00e5ff',
+                                    boxShadow: '0 0 15px rgba(0,229,255,0.4)',
+                                    transform: 'translateY(-1px)'
                                 }
                             }}
                         >
