@@ -3,7 +3,7 @@ import {
     Box, Button, Typography, Paper, TextField, MenuItem, Table,
     TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton,
     InputAdornment, Dialog, DialogTitle, DialogContent, DialogActions, Chip,
-    InputBase, alpha, useTheme
+    InputBase, alpha, useTheme, CircularProgress, Snackbar, Alert
 } from "@mui/material";
 import SearchIcon from '@mui/icons-material/Search';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -12,6 +12,9 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import HistoryIcon from '@mui/icons-material/History';
 import EditIcon from '@mui/icons-material/Edit';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+
+const pythonApi = "http://localhost:8000";
 
 const getCurrentMonthKey = () => {
     const now = new Date();
@@ -26,6 +29,51 @@ export default function BrandRatesModal({ open, onClose, resource, regions, sele
     const [selectedMonthYear, setSelectedMonthYear] = useState("");
     const [tempBrandRates, setTempBrandRates] = useState([]);
     const [brandSearchTerm, setBrandSearchTerm] = useState("");
+    const [isAiLoading, setIsAiLoading] = useState(false);
+    const [aiError, setAiError] = useState(null);
+
+    const handleFetchAiSuggestions = async () => {
+        setIsAiLoading(true);
+        setAiError(null);
+        try {
+            const res = await fetch(`${pythonApi}/api/ml/ai-brand-suggestions`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    resource: resource.description,
+                    region: selectedRegion || "Trivandrum",
+                    unit: resource.unit || "nos"
+                })
+            });
+            const data = await res.json();
+            if (data.success && data.suggestions && Array.isArray(data.suggestions)) {
+                const newBrandRates = [...tempBrandRates];
+                
+                data.suggestions.forEach(suggestion => {
+                    const existingIdx = newBrandRates.findIndex(br => br.brand && br.brand.toLowerCase() === suggestion.brand.toLowerCase());
+                    if (existingIdx !== -1) {
+                        newBrandRates[existingIdx][selectedRegion] = suggestion.price;
+                    } else {
+                        const newRow = { brand: suggestion.brand, [selectedRegion]: suggestion.price };
+                        regions.forEach(r => { 
+                            if (r.name !== selectedRegion) newRow[r.name] = ""; 
+                        });
+                        newBrandRates.push(newRow);
+                    }
+                });
+                setTempBrandRates(newBrandRates);
+            } else {
+                setAiError(data.error || "Failed to fetch suggestions");
+            }
+        } catch (error) {
+            console.error("AI Fetch Error:", error);
+            setAiError(error.message);
+        } finally {
+            setIsAiLoading(false);
+        }
+    };
 
     useEffect(() => {
         if (open && resource) {
@@ -281,23 +329,48 @@ export default function BrandRatesModal({ open, onClose, resource, regions, sele
                     </Table>
                 </TableContainer>
 
-                {/* ADD BRAND BUTTON — only current month */}
+                {/* ADD BRAND & AI SUGGESTIONS BUTTONS — only current month */}
                 {selectedMonthYear === getCurrentMonthKey() && (
-                    <Button
-                        variant="outlined"
-                        color="primary"
-                        startIcon={<AddCircleOutlineIcon />}
-                        onClick={() => {
-                            const newRow = { brand: "" };
-                            regions.forEach(r => { newRow[r.name] = ""; });
-                            setTempBrandRates([...tempBrandRates, newRow]);
-                        }}
-                        sx={{ mt: 2, fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }}
-                    >
-                        + ADD BRAND
-                    </Button>
+                    <Box display="flex" gap={2} mt={2}>
+                        <Button
+                            variant="outlined"
+                            color="primary"
+                            startIcon={<AddCircleOutlineIcon />}
+                            onClick={() => {
+                                const newRow = { brand: "" };
+                                regions.forEach(r => { newRow[r.name] = ""; });
+                                setTempBrandRates([...tempBrandRates, newRow]);
+                            }}
+                            sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }}
+                        >
+                            + ADD BRAND
+                        </Button>
+                        <Button
+                            variant="contained"
+                            disabled={isAiLoading}
+                            startIcon={isAiLoading ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+                            onClick={handleFetchAiSuggestions}
+                            sx={{ 
+                                fontFamily: "'JetBrains Mono', monospace", 
+                                fontSize: '12px',
+                                background: 'linear-gradient(45deg, #FFD700, #FFA500)',
+                                color: '#000',
+                                '&:hover': {
+                                    background: 'linear-gradient(45deg, #FFA500, #FF8C00)',
+                                }
+                            }}
+                        >
+                            {isAiLoading ? "FETCHING SUGGESTIONS..." : "AI SUGGESTIONS"}
+                        </Button>
+                    </Box>
                 )}
             </DialogContent>
+
+            <Snackbar open={!!aiError} autoHideDuration={6000} onClose={() => setAiError(null)}>
+                <Alert onClose={() => setAiError(null)} severity="error" sx={{ width: '100%', fontFamily: "'JetBrains Mono', monospace" }}>
+                    {aiError}
+                </Alert>
+            </Snackbar>
 
             <DialogActions sx={{ p: 3, borderTop: '1px solid', borderColor: 'divider', gap: 1 }}>
                 <Button

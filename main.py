@@ -1273,6 +1273,46 @@ async def export_training_data():
         raise HTTPException(status_code=404, detail="Training data file not found")
     return FileResponse(path=file_path, filename="market_training_data.csv", media_type="text/csv")
 
+class AiBrandSuggestionRequest(BaseModel):
+    resource: str
+    region: str
+    unit: str
+
+@app.post("/api/ml/ai-brand-suggestions")
+async def get_ai_brand_suggestions(req: AiBrandSuggestionRequest):
+    import requests
+    import json
+    import os
+    from dotenv import load_dotenv
+    
+    load_dotenv()
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return {"success": False, "error": "GEMINI_API_KEY not configured"}
+        
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
+    
+    prompt = f"Act as an expert construction estimator in {req.region}, Kerala, India. For the material '{req.resource}' (Unit: {req.unit}), provide realistic local market prices strictly in {req.region} for 3 to 5 common brands. Return ONLY a valid JSON array of objects, with exactly two keys: 'brand' (string) and 'price' (number). Ensure prices are realistic in INR."
+    
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.2,
+            "response_mime_type": "application/json"
+        }
+    }
+    
+    try:
+        res = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
+        res.raise_for_status()
+        data = res.json()
+        text_content = data['candidates'][0]['content']['parts'][0]['text']
+        brands_data = json.loads(text_content)
+        return {"success": True, "suggestions": brands_data}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 class LocalRate(BaseModel):
     resource: str
     rate: float
