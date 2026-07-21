@@ -1,8 +1,9 @@
-import { useState, useMemo, useEffect } from "react";
-import { Box, Button, Typography, Paper, TextField, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Alert, useTheme } from "@mui/material";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { Box, Button, Typography, Paper, TextField, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Alert, useTheme, CircularProgress } from "@mui/material";
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import UploadIcon from '@mui/icons-material/Upload';
 import { calculateMasterBoqRate, getResourceRate } from "../../engines/calculationEngine";
 import FormulaGuideDialog from "../workspace/FormulaGuideDialog";
 import DatabaseDialog from "./DatabaseDialog";
@@ -16,6 +17,59 @@ export default function CreateBoqTab({ regions, resources, masterBoqs, loadData,
     const theme = useTheme();
     const styles = getCreateBoqTabStyles(theme);
     const nativeStyles = getNativeStyles();
+
+    const [isExtractingPdf, setIsExtractingPdf] = useState(false);
+    const pdfInputRef = useRef(null);
+    const handlePdfUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            setIsExtractingPdf(true);
+            // Forward the PDF to the backend for processing
+            const baseUrl = import.meta.env.VITE_PYTHON_API_URL || "http://localhost:8000";
+            const url = `${baseUrl}/api/ml/extract-assembly-pdf`;
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log("PDF extraction results:", data);
+                
+                if (data.components && Array.isArray(data.components)) {
+                    const newRows = data.components.map(comp => {
+                        const rMatch = resources.find(r => (r.code || r.itemCode) === String(comp.code));
+                        if (rMatch) {
+                            return { id: crypto.randomUUID(), itemType: "resource", itemId: rMatch.id, formulaStr: String(comp.qty), qty: Number(comp.qty) };
+                        }
+                        const bMatch = masterBoqs.find(b => (b.code || b.itemCode) === String(comp.code));
+                        if (bMatch) {
+                            return { id: crypto.randomUUID(), itemType: "boq", itemId: bMatch.id, formulaStr: String(comp.qty), qty: Number(comp.qty) };
+                        }
+                        return { id: crypto.randomUUID(), itemType: "resource", itemId: "", tempCode: String(comp.code), tempDesc: "", formulaStr: String(comp.qty), qty: Number(comp.qty) };
+                    });
+                    
+                    setBoqRows(prev => [...prev, ...newRows]);
+                    triggerDialog("Import Success", `Successfully imported ${newRows.length} components from PDF!`, "success");
+                } else {
+                    triggerDialog("Import Warning", "PDF uploaded and processed successfully, but no components were found.", "warning");
+                }
+            } else {
+                throw new Error("Failed to process PDF on the server.");
+            }
+        } catch (error) {
+            console.error("Error uploading PDF:", error);
+            triggerDialog("Upload Failed", "Failed to upload PDF. Ensure backend is running and CORS is configured.", "error");
+        } finally {
+            if (pdfInputRef.current) pdfInputRef.current.value = null;
+            setIsExtractingPdf(false);
+        }
+    };
 
     const [boqCode, setBoqCode] = useState("");
     const [boqDesc, setBoqDesc] = useState("");
@@ -159,13 +213,28 @@ export default function CreateBoqTab({ regions, resources, masterBoqs, loadData,
     return (
         <Paper elevation={0} variant="outlined" sx={styles.mainPaper}>
 
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}>
                 <Typography variant="h6" fontWeight="bold" sx={styles.headerTitle}>
                     {editingBoq ? "EDIT" : "CREATE"}_DATABOOK_ASSEMBLY
                 </Typography>
-                {editingBoq && (
-                    <Button size="small" variant="outlined" color="error" onClick={clearEdit} sx={styles.cancelEditButton}>CANCEL_EDIT</Button>
-                )}
+                <Box display="flex" gap={2} alignItems="center">
+                    <input type="file" accept="application/pdf" ref={pdfInputRef} style={{ display: 'none' }} onChange={handlePdfUpload} />
+                    <Button 
+                        size="small" 
+                        variant="outlined" 
+                        color="secondary" 
+                        disableElevation 
+                        startIcon={isExtractingPdf ? <CircularProgress size={14} color="inherit" /> : <UploadIcon />} 
+                        onClick={() => pdfInputRef.current.click()} 
+                        disabled={isExtractingPdf}
+                        sx={{ fontFamily: "'JetBrains Mono', monospace", letterSpacing: '1px', fontSize: '11px', borderRadius: 1 }}
+                    >
+                        {isExtractingPdf ? "EXTRACTING..." : "UPLOAD ASSEMBLY PDF"}
+                    </Button>
+                    {editingBoq && (
+                        <Button size="small" variant="outlined" color="error" onClick={clearEdit} sx={styles.cancelEditButton}>CANCEL_EDIT</Button>
+                    )}
+                </Box>
             </Box>
 
             {/* 🔥 FIXED: Flexible stacking on mobile */}

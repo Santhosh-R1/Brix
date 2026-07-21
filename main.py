@@ -1278,6 +1278,83 @@ async def export_training_data():
         raise HTTPException(status_code=404, detail="Training data file not found")
     return FileResponse(path=file_path, filename="market_training_data.csv", media_type="text/csv")
 
+@app.post("/api/ml/extract-assembly-pdf")
+async def extract_assembly_pdf(file: UploadFile):
+    import fitz
+    import json
+    import os
+    import requests
+    import re
+    from dotenv import load_dotenv
+    
+    load_dotenv()
+    
+    try:
+        contents = await file.read()
+        doc = fitz.open(stream=contents, filetype="pdf")
+        text = ""
+        for i, page in enumerate(doc):
+            text += f"\n--- PAGE {i+1} ---\n"
+            text += page.get_text("text", sort=True) + "\n"
+            
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            return {"success": False, "error": "OPENROUTER_API_KEY not configured in environment"}
+            
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        
+        prompt = (
+            "Extract ONLY the sub-component resource items (e.g., Labour, Materials, Machinery) from the following Data Analysis PDF text. "
+            "Do NOT extract the main header assembly item (e.g., do not extract the 2.1.1 or its Header Quantity). "
+            "For each sub-component item, extract its Code (which usually appears under 'Sor/Spec Code' or 'MR Code' columns, e.g., '0115', '0114', '9999') and its Quantity. "
+            "CRITICAL EXCEPTION HANDLING: This is a multi-page PDF. A table row is often split perfectly across a page break! "
+            "This means a Code might be the very last item at the bottom of one page, but its description and Quantity are pushed to the top of the NEXT page. "
+            "You MUST ignore the page headers/footers in between and seamlessly connect the Code from the bottom of ANY page to the Quantity at the top of the NEXT page to reconstruct the item. "
+            "Return ONLY a valid JSON array of objects, with exactly two keys: 'code' (string) and 'qty' (number). "
+            "Ensure 'code' is a string exactly as it appears. Do not include any markdown formatting, backticks, or other text. Just the raw JSON array.\n\n"
+            f"TEXT:\n{text[:40000]}"
+        )
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        # We try a few models in case of failure or rate limits
+        models_list = [
+            "google/gemma-4-26b-a4b-it:free",
+            "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+            "poolside/laguna-xs-2.1:free"
+        ]
+        
+        res_data = None
+        for model_id in models_list:
+            try:
+                payload = {
+                    "model": model_id,
+                    "messages": [{"role": "user", "content": prompt}]
+                }
+                resp = requests.post(url, headers=headers, json=payload, timeout=20)
+                if resp.status_code == 200:
+                    result_text = resp.json()["choices"][0]["message"]["content"]
+                    result_text = re.sub(r'```json\s*', '', result_text)
+                    result_text = re.sub(r'```\s*', '', result_text).strip()
+                    res_data = json.loads(result_text)
+                    break
+            except Exception as e:
+                print(f"Model {model_id} failed: {e}")
+                continue
+                
+        if res_data is not None:
+            return {"success": True, "components": res_data}
+        else:
+            return {"success": False, "error": "Failed to extract data using AI models."}
+            
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
 class AiBrandSuggestionRequest(BaseModel):
     resource: str
     region: str
