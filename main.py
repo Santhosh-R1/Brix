@@ -21,7 +21,6 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-feature/professional-ui
     allow_origins=[
         "https://brix-client.onrender.com",
         "http://localhost:3000", 
@@ -31,12 +30,10 @@ feature/professional-ui
     allow_credentials=True,
 
     allow_origins=["*"], 
- openRouter
+
     allow_credentials=False,
 
     allow_credentials=["*"],
-i-prediction
- ai-prediction
     allow_methods=["*"],
     allow_headers=["*"],
 )
