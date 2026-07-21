@@ -196,7 +196,7 @@ const parsePDFItems = (allItems) => {
         const rateItem = rateItems.length > 0 ? rateItems[0] : null;
         const rate = rateItem ? Number(rateItem.str.replace(/,/g, '')) : 0;
         
-        const unitItems = block.items.filter(item => item.str.match(/^[a-zA-Z]+$/) && Math.abs(item.x - medianUnitX) < 40);
+        const unitItems = block.items.filter(item => item.str.match(/^[a-zA-Z]+$/) && !item.str.match(/^(?:UNIT|RATE)$/i) && Math.abs(item.x - medianUnitX) < 40);
         const unitItem = unitItems.length > 0 ? unitItems[0] : null;
         const unit = unitItem ? unitItem.str : "each";
         
@@ -209,7 +209,7 @@ const parsePDFItems = (allItems) => {
             item !== noItem &&
             item.x > (medianSpecCodeX + 20) && 
             (medianUnitX > 0 ? item.x < (medianUnitX - 10) : true) &&
-            !item.str.match(/^(?:DESCRIPTION|UNIT|RATE|REF|CODE|ITEM|NO|SL NO|SPEC|DATA)$/i)
+            !item.str.trim().match(/^(?:DESCRIPTION|SPECIFICATION|UNIT|RATE(?:\s*\(₹\))?|REF|CODE|SPEC\s*CODE|ITEM|NO\.?|SL\s*NO\.?|SPEC|DATA|QTY|QUANTITY|AMOUNT)$/i)
         );
         
         const specYMap = {};
