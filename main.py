@@ -21,6 +21,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
+feature/professional-ui
     allow_origins=[
         "https://brix-client.onrender.com",
         "http://localhost:3000", 
@@ -28,6 +29,14 @@ app.add_middleware(
     ],
     allow_origin_regex=r"https://.*\.onrender\.com",
     allow_credentials=True,
+
+    allow_origins=["*"], 
+ openRouter
+    allow_credentials=False,
+
+    allow_credentials=["*"],
+i-prediction
+ ai-prediction
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -1282,6 +1291,7 @@ class AiBrandSuggestionRequest(BaseModel):
     resource: str
     region: str
     unit: str
+    period: str
 
 @app.post("/api/ml/ai-brand-suggestions")
 async def get_ai_brand_suggestions(req: AiBrandSuggestionRequest):
@@ -1291,58 +1301,81 @@ async def get_ai_brand_suggestions(req: AiBrandSuggestionRequest):
     from dotenv import load_dotenv
     
     load_dotenv()
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
-        return {"success": False, "error": "GEMINI_API_KEY not configured"}
+        return {"success": False, "error": "OPENROUTER_API_KEY not configured in .env"}
         
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
+    url = "https://openrouter.ai/api/v1/chat/completions"
     
-    prompt = f"Act as an expert construction estimator in {req.region}, Kerala, India. For the material '{req.resource}', provide realistic local market prices strictly in {req.region} for 3 to 5 common brands. The price MUST be exactly for ONE {req.unit}. Return ONLY a valid JSON array of objects, with exactly two keys: 'brand' (string) and 'price' (number). Ensure prices are realistic in INR for 1 {req.unit}."
+    prompt = (
+        f"Act as a precise, local Indian construction quantity surveyor and cost estimator living in {req.region}, Kerala. "
+        f"Do NOT guess generic national averages or use outdated pricing. Provide highly accurate, hyper-localized retail market rates specifically for the material '{req.resource}' for the time period of {req.period}. "
+        f"CRITICAL INSTRUCTION: You must provide exactly 3 to 5 real, specific brand names (e.g., specific regional or national Indian brands relevant to this material) and their accurate local price in INR. "
+        f"The price MUST be strictly calculated for exactly ONE {req.unit}. Do not provide bulk prices. "
+        f"Return ONLY a valid JSON array of objects, with exactly two keys: 'brand' (string) and 'price' (number)."
+    )
     
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": 0.2,
-            "response_mime_type": "application/json"
-        }
+    models_list = [
+        "google/gemma-4-31b-it:free",
+        "google/gemma-4-26b-a4b-it:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "poolside/laguna-m.1:free",
+        "poolside/laguna-xs-2.1:free",
+        "cohere/north-mini-code:free",
+        "tencent/hy3:free",
+        "nvidia/nemotron-3.5-content-safety:free"
+    ]
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
     }
     
-    try:
-        import time
-        max_retries = 3
-        for attempt in range(max_retries):
-            res = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
-            if res.status_code == 429 and attempt < max_retries - 1:
-                time.sleep(3) # Wait 3 seconds and retry if rate-limited
-                continue
+    res = None
+    last_status = None
+    for model_id in models_list:
+        payload = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2
+        }
+        try:
+            res = requests.post(url, json=payload, headers=headers)
             res.raise_for_status()
-            break
+            break # Success! Break out of the loop
+        except requests.exceptions.HTTPError as e:
+            last_status = e.response.status_code
+            continue # Try the next model
+        except Exception:
+            continue
             
-        data = res.json()
-        text_content = data['candidates'][0]['content']['parts'][0]['text']
-        
-        # Strip potential markdown formatting (```json ... ```)
-        text_content = text_content.strip()
-        if text_content.startswith('```json'):
-            text_content = text_content[7:]
-        elif text_content.startswith('```'):
-            text_content = text_content[3:]
-        if text_content.endswith('```'):
-            text_content = text_content[:-3]
-        text_content = text_content.strip()
-        
+    if res is None or res.status_code != 200:
+        if last_status == 429:
+            return {"success": False, "error": "AI usage limit exceeded on all backup models. Please try again later."}
+        elif last_status == 401:
+            return {"success": False, "error": "Invalid OpenRouter API Key."}
+        return {"success": False, "error": "All AI backup models failed or are currently unavailable."}
+
+    data = res.json()
+    text_content = data['choices'][0]['message']['content']
+    
+    # Strip potential markdown formatting (```json ... ```)
+    text_content = text_content.strip()
+    if text_content.startswith('```json'):
+        text_content = text_content[7:]
+    elif text_content.startswith('```'):
+        text_content = text_content[3:]
+    if text_content.endswith('```'):
+        text_content = text_content[:-3]
+    text_content = text_content.strip()
+    
+    try:
         brands_data = json.loads(text_content)
         return {"success": True, "suggestions": brands_data}
-    except requests.exceptions.HTTPError as e:
-        status = e.response.status_code
-        if status == 503:
-            return {"success": False, "error": "AI Service is temporarily unavailable or busy. Please try again in a few moments."}
-        elif status == 429:
-            return {"success": False, "error": "AI usage limit exceeded. Please try again later or use a different key."}
-        else:
-            return {"success": False, "error": f"AI Engine responded with an error (Code {status})."}
     except Exception as e:
-        return {"success": False, "error": "An unexpected error occurred while communicating with the AI. Please try again."}
+        return {"success": False, "error": "Failed to parse AI response. Please try again."}
 
 
 class LocalRate(BaseModel):
