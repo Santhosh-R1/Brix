@@ -44,7 +44,8 @@ export default function BrandRatesModal({ open, onClose, resource, regions, sele
                 body: JSON.stringify({
                     resource: resource.description,
                     region: selectedRegion || "Trivandrum",
-                    unit: resource.unit || "nos"
+                    unit: resource.unit || "nos",
+                    period: selectedMonthYear
                 })
             });
             const data = await res.json();
