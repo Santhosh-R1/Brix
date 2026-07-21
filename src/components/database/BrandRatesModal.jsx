@@ -14,7 +14,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 
-const pythonApi = "http://localhost:8000";
+const pythonApi = import.meta.env.VITE_PYTHON_API_URL || "http://localhost:8000";
 
 const getCurrentMonthKey = () => {
     const now = new Date();
@@ -44,7 +44,8 @@ export default function BrandRatesModal({ open, onClose, resource, regions, sele
                 body: JSON.stringify({
                     resource: resource.description,
                     region: selectedRegion || "Trivandrum",
-                    unit: resource.unit || "nos"
+                    unit: resource.unit || "nos",
+                    period: selectedMonthYear
                 })
             });
             const data = await res.json();
