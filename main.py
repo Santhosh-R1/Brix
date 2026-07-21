@@ -22,7 +22,11 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
+ openRouter
     allow_credentials=False,
+
+    allow_credentials=["*"],
+i-prediction
     allow_methods=["*"],
     allow_headers=["*"],
 )
