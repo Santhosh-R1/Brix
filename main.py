@@ -1289,12 +1289,10 @@ async def get_ai_brand_suggestions(req: AiBrandSuggestionRequest):
     import requests
     import json
     import os
-    from dotenv import load_dotenv
     
-    load_dotenv()
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
-        return {"success": False, "error": "OPENROUTER_API_KEY not configured in .env"}
+        return {"success": False, "error": "OPENROUTER_API_KEY not configured in environment"}
         
     url = "https://openrouter.ai/api/v1/chat/completions"
     
@@ -1349,20 +1347,20 @@ async def get_ai_brand_suggestions(req: AiBrandSuggestionRequest):
             return {"success": False, "error": "Invalid OpenRouter API Key."}
         return {"success": False, "error": "All AI backup models failed or are currently unavailable."}
 
-    data = res.json()
-    text_content = data['choices'][0]['message']['content']
-    
-    # Strip potential markdown formatting (```json ... ```)
-    text_content = text_content.strip()
-    if text_content.startswith('```json'):
-        text_content = text_content[7:]
-    elif text_content.startswith('```'):
-        text_content = text_content[3:]
-    if text_content.endswith('```'):
-        text_content = text_content[:-3]
-    text_content = text_content.strip()
-    
     try:
+        data = res.json()
+        text_content = data['choices'][0]['message']['content']
+        
+        # Strip potential markdown formatting (```json ... ```)
+        text_content = text_content.strip()
+        if text_content.startswith('```json'):
+            text_content = text_content[7:]
+        elif text_content.startswith('```'):
+            text_content = text_content[3:]
+        if text_content.endswith('```'):
+            text_content = text_content[:-3]
+        text_content = text_content.strip()
+        
         brands_data = json.loads(text_content)
         return {"success": True, "suggestions": brands_data}
     except Exception as e:
