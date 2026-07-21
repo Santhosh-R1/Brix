@@ -1284,6 +1284,7 @@ async def extract_assembly_pdf(file: UploadFile):
     import json
     import os
     import requests
+
     import re
     try:
         from dotenv import load_dotenv

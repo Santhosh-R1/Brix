@@ -301,9 +301,16 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
     const filteredResources = useMemo(() => {
         const masterBoqCodes = new Set(masterBoqs.map(b => b.itemCode).filter(Boolean));
         const normalizedSearch = !searchTerm || searchTerm.trim() === "" ? "" : deferredSearchTerm.toLowerCase();
+        
+        // Regex to identify assembly codes (e.g., 2.1, 2.37, 2.1.1, etc.)
+        const assemblyCodeRegex = /^\d+\.\d+(\.\d+)*$/;
+        
         let filtered = resources.filter(r => {
             // Do not show master databook data (assemblies that exist in masterBoqs)
             if (r.code && masterBoqCodes.has(r.code)) return false;
+            
+            // Also hide any orphaned assemblies that were deleted from masterBoqs but still exist in resources
+            if (r.code && assemblyCodeRegex.test(String(r.code).trim())) return false;
 
             if (normalizedSearch === "") {
                 if (selectedRegion && hideEmptyRates) {
