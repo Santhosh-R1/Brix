@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Box, Button, Typography, Paper, TextField, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Alert, useTheme, CircularProgress } from "@mui/material";
+import { Box, Button, Typography, Paper, TextField, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Alert, useTheme, CircularProgress, Backdrop } from "@mui/material";
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
@@ -19,6 +19,7 @@ export default function CreateBoqTab({ regions, resources, masterBoqs, loadData,
     const nativeStyles = getNativeStyles();
 
     const [isExtractingPdf, setIsExtractingPdf] = useState(false);
+    const [isInitializing, setIsInitializing] = useState(false);
     const pdfInputRef = useRef(null);
     const handlePdfUpload = async (e) => {
         const file = e.target.files[0];
@@ -92,43 +93,49 @@ export default function CreateBoqTab({ regions, resources, masterBoqs, loadData,
 
     // Initialize with editing data if provided
     useEffect(() => {
-        if (editingBoq) {
-            setBoqCode(editingBoq.itemCode || "");
-            setBoqDesc(editingBoq.description || "");
-            setBoqUnit(editingBoq.unit || "cum");
-            setBoqOH(editingBoq.overhead || 0);
-            setBoqProfit(editingBoq.profit || 0);
-
-            // Defensively ensure components array is valid
-            const components = Array.isArray(editingBoq.components) ? editingBoq.components :
-                (typeof editingBoq.components === 'string' ? JSON.parse(editingBoq.components || '[]') : []);
-
-            // Filter out the auto-created self-reference resource if it's the only component
-            let finalComponents = components;
-            if (components.length === 1) {
-                const singleComp = components[0];
-                const resource = resources.find(r => r.id === singleComp.itemId);
-                if (resource && resource.code === editingBoq.itemCode) {
-                    finalComponents = [];
+        setIsInitializing(true);
+        
+        // Defer execution slightly so the UI can paint the loading spinner before heavy processing
+        setTimeout(() => {
+            if (editingBoq) {
+                setBoqCode(editingBoq.itemCode || "");
+                setBoqDesc(editingBoq.description || "");
+                setBoqUnit(editingBoq.unit || "cum");
+                setBoqOH(editingBoq.overhead || 0);
+                setBoqProfit(editingBoq.profit || 0);
+    
+                // Defensively ensure components array is valid
+                const components = Array.isArray(editingBoq.components) ? editingBoq.components :
+                    (typeof editingBoq.components === 'string' ? JSON.parse(editingBoq.components || '[]') : []);
+    
+                // Filter out the auto-created self-reference resource if it's the only component
+                let finalComponents = components;
+                if (components.length === 1) {
+                    const singleComp = components[0];
+                    const resource = resources.find(r => r.id === singleComp.itemId);
+                    if (resource && resource.code === editingBoq.itemCode) {
+                        finalComponents = [];
+                    }
                 }
+    
+                setBoqRows(finalComponents.map(c => ({
+                    id: crypto.randomUUID(),
+                    itemType: c.itemType || 'resource',
+                    itemId: c.itemId,
+                    qty: c.qty,
+                    formulaStr: c.formulaStr || String(c.qty)
+                })));
+            } else {
+                // Clear form if new
+                setBoqCode("");
+                setBoqDesc("");
+                setBoqUnit("cum");
+                setBoqOH(15);
+                setBoqProfit(15);
+                setBoqRows([]);
             }
-
-            setBoqRows(finalComponents.map(c => ({
-                id: crypto.randomUUID(),
-                itemType: c.itemType || 'resource',
-                itemId: c.itemId,
-                qty: c.qty,
-                formulaStr: c.formulaStr || String(c.qty)
-            })));
-        } else {
-            // Clear form if new
-            setBoqCode("");
-            setBoqDesc("");
-            setBoqUnit("cum");
-            setBoqOH(15);
-            setBoqProfit(15);
-            setBoqRows([]);
-        }
+            setIsInitializing(false);
+        }, 150); // 150ms delay for smooth transition
     }, [editingBoq]);
 
     const computeQty = (formulaStr, currentRows) => {
@@ -212,6 +219,15 @@ export default function CreateBoqTab({ regions, resources, masterBoqs, loadData,
 
     return (
         <Paper elevation={0} variant="outlined" sx={styles.mainPaper}>
+            <Backdrop
+                sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1, display: 'flex', flexDirection: 'column', gap: 2 }}
+                open={isExtractingPdf || isInitializing}
+            >
+                <CircularProgress color="inherit" size={48} />
+                <Typography variant="h6" sx={{ fontFamily: "'JetBrains Mono', monospace", letterSpacing: '2px', fontWeight: 'bold' }}>
+                    {isExtractingPdf ? "EXTRACTING COMPONENTS..." : "LOADING DATABOOK ASSEMBLY..."}
+                </Typography>
+            </Backdrop>
 
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}>
                 <Typography variant="h6" fontWeight="bold" sx={styles.headerTitle}>

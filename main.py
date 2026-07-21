@@ -1285,9 +1285,11 @@ async def extract_assembly_pdf(file: UploadFile):
     import os
     import requests
     import re
-    from dotenv import load_dotenv
-    
-    load_dotenv()
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
     
     try:
         contents = await file.read()
