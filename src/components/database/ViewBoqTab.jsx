@@ -98,7 +98,7 @@ const parsePDFItems = (allItems) => {
         linesMap[foundKey].push(item);
     });
 
-    const sortedYKeys = Object.keys(linesMap).sort((a, b) => Number(a) - Number(b)); // top to bottom
+    const sortedYKeys = Object.keys(linesMap).sort((a, b) => Number(b) - Number(a)); // top to bottom (Y decreases)
     const yBands = sortedYKeys.map(k => ({
         y: Number(k),
         items: linesMap[k].sort((a, b) => a.x - b.x)
@@ -107,7 +107,7 @@ const parsePDFItems = (allItems) => {
     // 3. Find gap threshold for item separation
     const gaps = [];
     for (let i = 0; i < yBands.length - 1; i++) {
-        gaps.push(yBands[i + 1].y - yBands[i].y);
+        gaps.push(yBands[i].y - yBands[i + 1].y);
     }
     const validGaps = gaps.filter(g => g > 0).sort((a, b) => a - b);
     const medianGap = validGaps.length > 0 ? validGaps[Math.floor(validGaps.length / 2)] : 15;
@@ -119,7 +119,7 @@ const parsePDFItems = (allItems) => {
     for (let i = 0; i < yBands.length; i++) {
         currentBlock.items.push(...yBands[i].items);
         if (i < yBands.length - 1) {
-            const gap = yBands[i + 1].y - yBands[i].y;
+            const gap = yBands[i].y - yBands[i + 1].y;
             if (gap > gapThreshold) {
                 initialBlocks.push(currentBlock);
                 currentBlock = { items: [] };
@@ -144,7 +144,7 @@ const parsePDFItems = (allItems) => {
     // 6. Fallback: split block by midpoint if it contains multiple Spec Codes
     const finalBlocks = [];
     mergedBlocks.forEach(block => {
-        const specCodeItems = block.items.filter(item => item.str.match(/^\d+\.\d+(?:\.\d+)*[a-zA-Z]*$/) && Math.abs(item.x - medianSpecCodeX) < 40).sort((a, b) => a.y - b.y);
+        const specCodeItems = block.items.filter(item => item.str.match(/^\d+\.\d+(?:\.\d+)*[a-zA-Z]*$/) && Math.abs(item.x - medianSpecCodeX) < 40).sort((a, b) => b.y - a.y);
         
         if (specCodeItems.length <= 1) {
             finalBlocks.push(block);
@@ -161,7 +161,7 @@ const parsePDFItems = (allItems) => {
                 }
                 blockYBands[foundKey].push(item);
             });
-            const sortedYs = Object.keys(blockYBands).sort((a, b) => Number(a) - Number(b));
+            const sortedYs = Object.keys(blockYBands).sort((a, b) => Number(b) - Number(a));
             
             sortedYs.forEach(yStr => {
                 const y = Number(yStr);
@@ -206,7 +206,10 @@ const parsePDFItems = (allItems) => {
             item !== specCodeItem && 
             item !== rateItem && 
             item !== unitItem && 
-            item !== noItem
+            item !== noItem &&
+            item.x > (medianSpecCodeX + 20) && 
+            (medianUnitX > 0 ? item.x < (medianUnitX - 10) : true) &&
+            !item.str.match(/^(?:DESCRIPTION|UNIT|RATE|REF|CODE|ITEM|NO|SL NO|SPEC|DATA)$/i)
         );
         
         const specYMap = {};
@@ -219,7 +222,7 @@ const parsePDFItems = (allItems) => {
             specYMap[foundKey].push(item);
         });
         
-        const sortedYKeys = Object.keys(specYMap).sort((a, b) => Number(a) - Number(b));
+        const sortedYKeys = Object.keys(specYMap).sort((a, b) => Number(b) - Number(a));
         const specLines = sortedYKeys.map(yKey => {
             const lineItems = specYMap[yKey].sort((a, b) => a.x - b.x);
             return lineItems.map(item => item.str).join(" ");
