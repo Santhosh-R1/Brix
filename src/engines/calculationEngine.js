@@ -159,6 +159,8 @@ export function calculateMasterBoqRate(masterBoq, allResources, allMasterBoqs, r
             } else if (comp.itemType === 'boq') {
                 const nestedBoq = context?.boqMap ? context.boqMap.get(String(comp.itemId)) : allMasterBoqs.find(b => String(b.id) === String(comp.itemId));
                 rate = calculateMasterBoqRate(nestedBoq, allResources, allMasterBoqs, regionName, new Set(visited), project, context);
+            } else if (comp.itemType === 'custom') {
+                rate = Number(comp.rate) || 0;
             }
 
             const amount = computedQty * rate;

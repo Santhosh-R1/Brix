@@ -1358,6 +1358,85 @@ async def extract_assembly_pdf(file: UploadFile):
         traceback.print_exc()
         return {"success": False, "error": str(e)}
 
+@app.post("/api/ml/extract-master-databook-pdf")
+async def extract_master_databook_pdf(file: UploadFile):
+    import fitz
+    import json
+    import os
+    import requests
+    import re
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+    
+    try:
+        contents = await file.read()
+        doc = fitz.open(stream=contents, filetype="pdf")
+        text = ""
+        for i, page in enumerate(doc):
+            text += f"\n--- PAGE {i+1} ---\n"
+            text += page.get_text("text", sort=True) + "\n"
+            
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            return {"success": False, "error": "OPENROUTER_API_KEY not configured in environment"}
+            
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        
+        prompt = (
+            "Extract all the Master BoQ items from the following Databook PDF text. "
+            "For each item, extract its Code (e.g., '4.1.1', '2.2.1', '0115'), Description, Unit (e.g., 'cum', 'sqm', 'each', 'kg'), and Rate (a number, e.g. 150.50). "
+            "CRITICAL EXCEPTION HANDLING: This is a multi-page PDF. A table row is often split perfectly across a page break! "
+            "This means an Item Code might be the very last thing at the bottom of one page, but its Description, Unit and Rate are pushed to the top of the NEXT page. "
+            "Or the description text is split across the page break. "
+            "You MUST ignore the page headers/footers in between and seamlessly connect the parts across pages to reconstruct the item. "
+            "Also, ignore any header rows like 'No', 'Spec Code', 'Specification', 'Unit', 'Rate'. "
+            "Return ONLY a valid JSON array of objects, with exactly four keys: 'itemCode' (string), 'description' (string), 'unit' (string), and 'rate' (number). "
+            "Ensure the description is in natural reading order. Do not include any markdown formatting, backticks, or other text. Just the raw JSON array.\n\n"
+            f"TEXT:\n{text[:40000]}"
+        )
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        models_list = [
+            "google/gemini-2.5-flash",
+            "anthropic/claude-3-haiku",
+            "openai/gpt-4o-mini"
+        ]
+        
+        res_data = None
+        for model_id in models_list:
+            try:
+                payload = {
+                    "model": model_id,
+                    "messages": [{"role": "user", "content": prompt}]
+                }
+                resp = requests.post(url, headers=headers, json=payload, timeout=30)
+                if resp.status_code == 200:
+                    result_text = resp.json()["choices"][0]["message"]["content"]
+                    result_text = re.sub(r'```json\s*', '', result_text)
+                    result_text = re.sub(r'```\s*', '', result_text).strip()
+                    res_data = json.loads(result_text)
+                    break
+            except Exception as e:
+                print(f"Model {model_id} failed: {e}")
+                continue
+                
+        if res_data is not None:
+            return {"success": True, "items": res_data}
+        else:
+            return {"success": False, "error": "Failed to extract data using AI models."}
+            
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
 class AiBrandSuggestionRequest(BaseModel):
     resource: str
     region: str

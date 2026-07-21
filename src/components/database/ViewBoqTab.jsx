@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { Box, Button, Typography, Paper, TextField, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination, TableSortLabel, InputAdornment, Pagination, IconButton, Backdrop, CircularProgress, useTheme } from "@mui/material";
 import SearchIcon from '@mui/icons-material/Search';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -51,193 +51,6 @@ const STATIC_CATEGORIES = [
     "100. KWA Approved Data"
 ];
 
-const loadPdfJs = () => {
-    return new Promise((resolve, reject) => {
-        if (window['pdfjs-dist/build/pdf']) {
-            resolve(window['pdfjs-dist/build/pdf']);
-            return;
-        }
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
-        script.onload = () => {
-            const pdfjs = window['pdfjs-dist/build/pdf'];
-            pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-            resolve(pdfjs);
-        };
-        script.onerror = reject;
-        document.head.appendChild(script);
-    });
-};
-
-const parsePDFItems = (allItems) => {
-    // 1. Determine column X coordinates using medians to handle variations safely
-    const potentialSpecCodes = allItems.filter(item => item.str.match(/^\d+\.\d+(?:\.\d+)*[a-zA-Z]*$/) && item.x < 150);
-    const specCodeXs = potentialSpecCodes.map(i => i.x).sort((a, b) => a - b);
-    const medianSpecCodeX = specCodeXs.length > 0 ? specCodeXs[Math.floor(specCodeXs.length / 2)] : 80;
-
-    const potentialRates = allItems.filter(item => item.str.match(/^[\d,]+(?:\.\d+)?$/) && item.x > 350 && item.x < 550);
-    const rateXs = potentialRates.map(i => i.x).sort((a, b) => a - b);
-    const medianRateX = rateXs.length > 0 ? rateXs[Math.floor(rateXs.length / 2)] : 480;
-
-    const potentialUnits = allItems.filter(item => item.str.match(/^[a-zA-Z]+$/) && item.x > 450);
-    const unitXs = potentialUnits.map(i => i.x).sort((a, b) => a - b);
-    const medianUnitX = unitXs.length > 0 ? unitXs[Math.floor(unitXs.length / 2)] : 530;
-
-    const potentialNos = allItems.filter(item => item.str.match(/^\d+$/) && item.x < 80);
-    const noXs = potentialNos.map(i => i.x).sort((a, b) => a - b);
-    const medianNoX = noXs.length > 0 ? noXs[Math.floor(noXs.length / 2)] : 40;
-
-    // 2. Group items into Y-bands
-    const linesMap = {};
-    allItems.forEach(item => {
-        let foundKey = Object.keys(linesMap).find(k => Math.abs(Number(k) - item.y) <= 5);
-        if (!foundKey) {
-            foundKey = String(item.y);
-            linesMap[foundKey] = [];
-        }
-        linesMap[foundKey].push(item);
-    });
-
-    const sortedYKeys = Object.keys(linesMap).sort((a, b) => Number(b) - Number(a)); // top to bottom (Y decreases)
-    const yBands = sortedYKeys.map(k => ({
-        y: Number(k),
-        items: linesMap[k].sort((a, b) => a.x - b.x)
-    }));
-
-    // 3. Find gap threshold for item separation
-    const gaps = [];
-    for (let i = 0; i < yBands.length - 1; i++) {
-        gaps.push(yBands[i].y - yBands[i + 1].y);
-    }
-    const validGaps = gaps.filter(g => g > 0).sort((a, b) => a - b);
-    const medianGap = validGaps.length > 0 ? validGaps[Math.floor(validGaps.length / 2)] : 15;
-    const gapThreshold = Math.max(medianGap * 1.8, 20);
-
-    // 4. Split into initial blocks by gap
-    const initialBlocks = [];
-    let currentBlock = { items: [] };
-    for (let i = 0; i < yBands.length; i++) {
-        currentBlock.items.push(...yBands[i].items);
-        if (i < yBands.length - 1) {
-            const gap = yBands[i].y - yBands[i + 1].y;
-            if (gap > gapThreshold) {
-                initialBlocks.push(currentBlock);
-                currentBlock = { items: [] };
-            }
-        }
-    }
-    if (currentBlock.items.length > 0) initialBlocks.push(currentBlock);
-
-    // 5. Merge blocks that don't have a Spec Code (e.g., page breaks)
-    const mergedBlocks = [];
-    for (let i = 0; i < initialBlocks.length; i++) {
-        const block = initialBlocks[i];
-        const hasSpecCode = block.items.some(item => item.str.match(/^\d+\.\d+(?:\.\d+)*[a-zA-Z]*$/) && Math.abs(item.x - medianSpecCodeX) < 40);
-        
-        if (hasSpecCode || mergedBlocks.length === 0) {
-            mergedBlocks.push(block);
-        } else {
-            mergedBlocks[mergedBlocks.length - 1].items.push(...block.items);
-        }
-    }
-
-    // 6. Fallback: split block by midpoint if it contains multiple Spec Codes
-    const finalBlocks = [];
-    mergedBlocks.forEach(block => {
-        const specCodeItems = block.items.filter(item => item.str.match(/^\d+\.\d+(?:\.\d+)*[a-zA-Z]*$/) && Math.abs(item.x - medianSpecCodeX) < 40).sort((a, b) => b.y - a.y);
-        
-        if (specCodeItems.length <= 1) {
-            finalBlocks.push(block);
-        } else {
-            let currentSubBlock = { items: [] };
-            let currentSpecIdx = 0;
-            
-            const blockYBands = {};
-            block.items.forEach(item => {
-                let foundKey = Object.keys(blockYBands).find(k => Math.abs(Number(k) - item.y) <= 5);
-                if (!foundKey) {
-                    foundKey = String(item.y);
-                    blockYBands[foundKey] = [];
-                }
-                blockYBands[foundKey].push(item);
-            });
-            const sortedYs = Object.keys(blockYBands).sort((a, b) => Number(b) - Number(a));
-            
-            sortedYs.forEach(yStr => {
-                const y = Number(yStr);
-                if (currentSpecIdx < specCodeItems.length - 1) {
-                    const currentSpecY = specCodeItems[currentSpecIdx].y;
-                    const nextSpecY = specCodeItems[currentSpecIdx + 1].y;
-                    const midpoint = (currentSpecY + nextSpecY) / 2;
-                    
-                    if (y > midpoint) {
-                        finalBlocks.push(currentSubBlock);
-                        currentSubBlock = { items: [] };
-                        currentSpecIdx++;
-                    }
-                }
-                currentSubBlock.items.push(...blockYBands[yStr]);
-            });
-            finalBlocks.push(currentSubBlock);
-        }
-    });
-
-    // 7. Parse items from blocks
-    const parsedItems = [];
-    finalBlocks.forEach(block => {
-        if (block.items.length === 0) return;
-        
-        const specCodeItem = block.items.find(item => item.str.match(/^\d+\.\d+(?:\.\d+)*[a-zA-Z]*$/) && Math.abs(item.x - medianSpecCodeX) < 40);
-        if (!specCodeItem) return;
-        
-        const itemCode = specCodeItem.str;
-        
-        const rateItems = block.items.filter(item => item.str.match(/^[\d,]+(?:\.\d+)?$/) && Math.abs(item.x - medianRateX) < 40);
-        const rateItem = rateItems.length > 0 ? rateItems[0] : null;
-        const rate = rateItem ? Number(rateItem.str.replace(/,/g, '')) : 0;
-        
-        const unitItems = block.items.filter(item => item.str.match(/^[a-zA-Z]+$/) && !item.str.match(/^(?:UNIT|RATE)$/i) && Math.abs(item.x - medianUnitX) < 40);
-        const unitItem = unitItems.length > 0 ? unitItems[0] : null;
-        const unit = unitItem ? unitItem.str : "each";
-        
-        const noItem = block.items.find(item => item.str.match(/^\d+$/) && Math.abs(item.x - medianNoX) < 30);
-        
-        const specItems = block.items.filter(item => 
-            item !== specCodeItem && 
-            item !== rateItem && 
-            item !== unitItem && 
-            item !== noItem &&
-            item.x > (medianSpecCodeX + 20) && 
-            (medianUnitX > 0 ? item.x < (medianUnitX - 10) : true) &&
-            !item.str.trim().match(/^(?:DESCRIPTION|SPECIFICATION|UNIT|RATE(?:\s*\(₹\))?|REF|CODE|SPEC\s*CODE|ITEM|NO\.?|SL\s*NO\.?|SPEC|DATA|QTY|QUANTITY|AMOUNT)$/i)
-        );
-        
-        const specYMap = {};
-        specItems.forEach(item => {
-            let foundKey = Object.keys(specYMap).find(k => Math.abs(Number(k) - item.y) <= 5);
-            if (!foundKey) {
-                foundKey = String(item.y);
-                specYMap[foundKey] = [];
-            }
-            specYMap[foundKey].push(item);
-        });
-        
-        const sortedYKeys = Object.keys(specYMap).sort((a, b) => Number(b) - Number(a));
-        const specLines = sortedYKeys.map(yKey => {
-            const lineItems = specYMap[yKey].sort((a, b) => a.x - b.x);
-            return lineItems.map(item => item.str).join(" ");
-        });
-        
-        parsedItems.push({
-            itemCode: itemCode,
-            description: specLines.join(' ').trim(),
-            unit: unit,
-            rate: rate
-        });
-    });
-
-    return parsedItems;
-};
 
 const Resizer = ({ onMouseDown }) => (
     <div onMouseDown={onMouseDown} style={getResizerStyle()} onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(59, 130, 246, 0.2)'} onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'} />
@@ -263,6 +76,12 @@ export default function ViewBoqTab({ masterBoqs, regions, resources, onEditBoq, 
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [uploadStatus, setUploadStatus] = useState({ active: false, status: 'idle', message: '' });
     const excelInputRef = useRef(null);
+
+    const [expandedDesc, setExpandedDesc] = useState({});
+    const toggleDesc = (id) => {
+        if (!id) return;
+        setExpandedDesc(prev => ({ ...prev, [id]: !prev[id] }));
+    };
 
     const handleAddCategory = (newCat) => {
         const saved = localStorage.getItem("custom_categories");
@@ -392,27 +211,15 @@ export default function ViewBoqTab({ masterBoqs, regions, resources, onEditBoq, 
 
                         if (!itemCode || !description) return;
 
-                        const resourceId = window.crypto.randomUUID();
-                        const ratesObj = {};
-                        regions.forEach(r => {
-                            ratesObj[r.name] = rate;
-                        });
-
-                        resourcesToSave.push({
-                            id: resourceId,
-                            code: itemCode,
-                            description,
-                            unit,
-                            rates: JSON.stringify(ratesObj),
-                            rateHistory: JSON.stringify([])
-                        });
-
+                        // We use itemType: "custom" so we don't pollute the Local Market Rates (resources) table
                         const components = [
                             {
-                                itemType: "resource",
-                                itemId: resourceId,
+                                itemType: "custom",
+                                itemId: "custom-" + window.crypto.randomUUID(),
+                                description: description,
                                 qty: 1,
-                                formulaStr: "1"
+                                formulaStr: "1",
+                                rate: rate
                             }
                         ];
 
@@ -425,9 +232,6 @@ export default function ViewBoqTab({ masterBoqs, regions, resources, onEditBoq, 
                             components: JSON.stringify(components)
                         });
                     });
-
-                    // 1. Bulk save resources
-                    await window.api.db.bulkSaveResources(resourcesToSave);
 
                     // 2. Save master BOQs
                     let added = 0;
@@ -498,136 +302,120 @@ export default function ViewBoqTab({ masterBoqs, regions, resources, onEditBoq, 
 
     const pdfInputRef = useRef(null);
 
-    const handlePdfUpload = (e) => {
+    const handlePdfUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
         setUploadStatus({ active: true, status: 'loading', message: '' });
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-            try {
-                const pdfjsLib = await loadPdfJs();
-                const arrayBuffer = event.target.result;
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        
+        const formData = new FormData();
+        formData.append("file", file);
 
-                let allItems = [];
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const textContent = await page.getTextContent();
+        try {
+            const baseUrl = import.meta.env.VITE_PYTHON_API_URL || "http://localhost:8000";
+            const url = `${baseUrl}/api/ml/extract-master-databook-pdf`;
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData
+            });
 
-                    textContent.items.forEach(item => {
-                        const text = item.str.trim();
-                        if (!text) return;
-                        
-                        if (text === "No" || text === "Spec" || text === "Code" || text === "Specification" || text === "Rate(₹)" || text === "Unit" || text === "PRICE") return;
-                        if (text.match(/^Page \d+ of \d+/)) return;
-                        if (text.includes("Code Specification Rate")) return;
-                        if (text === "No Spec") return;
+            if (response.ok) {
+                const data = await response.json();
+                
+                if (data.success && data.items && Array.isArray(data.items)) {
+                    if (data.items.length === 0) {
+                        setUploadStatus({
+                            active: true,
+                            status: 'error',
+                            message: "No valid items found in the PDF. Please check the format."
+                        });
+                        return;
+                    }
 
-                        // PDF coordinates are bottom-up. Create a top-down continuous global Y coordinate.
-                        const globalY = (pdf.numPages - i) * 2000 + item.transform[5];
-                        
-                        allItems.push({
-                            str: text,
-                            x: item.transform[4],
-                            y: globalY,
-                            originalY: item.transform[5]
+                    const resourcesToSave = [];
+                    const boqsToSave = [];
+
+                    data.items.forEach(item => {
+                        const itemCode = String(item.itemCode || "").trim();
+                        const description = String(item.description || "").trim();
+                        const unit = String(item.unit || "each").trim();
+                        const rate = Number(item.rate || 0);
+
+                        if (!itemCode || !description) return;
+
+                        // We use itemType: "custom" so we don't pollute the Local Market Rates (resources) table
+                        const components = [
+                            {
+                                itemType: "custom",
+                                itemId: "custom-" + window.crypto.randomUUID(),
+                                description: description,
+                                qty: 1,
+                                formulaStr: "1",
+                                rate: rate
+                            }
+                        ];
+
+                        boqsToSave.push({
+                            itemCode,
+                            description,
+                            unit,
+                            overhead: 0,
+                            profit: 0,
+                            components: JSON.stringify(components)
                         });
                     });
-                }
 
-                if (allItems.length === 0) {
-                    setUploadStatus({
-                        active: true,
-                        status: 'error',
-                        message: "No text found in the PDF. Please check the format."
-                    });
-                    return;
-                }
+                    if (boqsToSave.length === 0) {
+                        setUploadStatus({
+                            active: true,
+                            status: 'error',
+                            message: "AI could not parse any complete items from this PDF."
+                        });
+                        return;
+                    }
 
-                const parsedItems = parsePDFItems(allItems);
-                if (parsedItems.length === 0) {
-                    setUploadStatus({
-                        active: true,
-                        status: 'error',
-                        message: "No valid items found in the PDF. Please check the format."
-                    });
-                    return;
-                }
-
-                const resourcesToSave = [];
-                const boqsToSave = [];
-
-                parsedItems.forEach(item => {
-                    const resourceId = window.crypto.randomUUID();
-                    const ratesObj = {};
-                    regions.forEach(r => {
-                        ratesObj[r.name] = item.rate;
-                    });
-
-                    resourcesToSave.push({
-                        id: resourceId,
-                        code: item.itemCode,
-                        description: item.description,
-                        unit: item.unit,
-                        rates: JSON.stringify(ratesObj),
-                        rateHistory: JSON.stringify([])
-                    });
-
-                    const components = [
-                        {
-                            itemType: "resource",
-                            itemId: resourceId,
-                            qty: 1,
-                            formulaStr: "1"
+                    // 2. Save master BOQs
+                    let added = 0;
+                    for (const boq of boqsToSave) {
+                        const existing = masterBoqs.find(b => b.itemCode === boq.itemCode);
+                        if (existing) {
+                            await window.api.db.saveMasterBoq(boq, existing.id, false);
+                        } else {
+                            await window.api.db.saveMasterBoq(boq, null, true);
                         }
-                    ];
-
-                    boqsToSave.push({
-                        itemCode: item.itemCode,
-                        description: item.description,
-                        unit: item.unit,
-                        overhead: 0,
-                        profit: 0,
-                        components: JSON.stringify(components)
-                    });
-                });
-
-                // 1. Bulk save resources
-                await window.api.db.bulkSaveResources(resourcesToSave);
-
-                // 2. Save master BOQs
-                let added = 0;
-                let updated = 0;
-                for (const boq of boqsToSave) {
-                    const existing = masterBoqs.find(b => b.itemCode === boq.itemCode);
-                    if (existing) {
-                        await window.api.db.saveMasterBoq(boq, existing.id, false);
-                        updated++;
-                    } else {
-                        await window.api.db.saveMasterBoq(boq, null, true);
                         added++;
                     }
-                }
 
-                setUploadStatus({
-                    active: true,
-                    status: 'success',
-                    message: `PDF Assemblies Processed!\n\nAdded: ${added}`
-                });
-                loadData();
-            } catch (err) {
-                console.error(err);
+                    setUploadStatus({
+                        active: true,
+                        status: 'success',
+                        message: `Databook PDF Processed by AI!\n\nProcessed: ${added} items`
+                    });
+                    loadData();
+                } else {
+                    setUploadStatus({
+                        active: true,
+                        status: 'error',
+                        message: data.error || "Failed to extract PDF data using AI."
+                    });
+                }
+            } else {
                 setUploadStatus({
                     active: true,
                     status: 'error',
-                    message: "Failed to parse or process the PDF file."
+                    message: `Server returned error ${response.status}`
                 });
-            } finally {
-                if (pdfInputRef.current) pdfInputRef.current.value = "";
             }
-        };
-        reader.readAsArrayBuffer(file);
+        } catch (error) {
+            console.error("PDF upload error:", error);
+            setUploadStatus({
+                active: true,
+                status: 'error',
+                message: "Error processing PDF: " + error.message
+            });
+        } finally {
+            if (pdfInputRef.current) pdfInputRef.current.value = "";
+        }
     };
 
     const totalPages = Math.ceil(processedBOQs.length / rowsPerPage);
@@ -745,13 +533,20 @@ export default function ViewBoqTab({ masterBoqs, regions, resources, onEditBoq, 
                     <TableBody>
                         {paginatedBOQs.length > 0 ? (
                             paginatedBOQs.map((b) => {
+                                const rowKey = b.id || b.itemCode;
+                                const isExpanded = !!expandedDesc[rowKey];
                                 return (
-                                    <TableRow key={b.id} hover>
-                                        <TableCell sx={styles.bodyCellCode}>{b.itemCode || '-'}</TableCell>
-                                        <TableCell sx={styles.bodyCellDesc}>{b.description}</TableCell>
-                                        <TableCell sx={styles.bodyCellUnit}>{b.unit}</TableCell>
-                                        <TableCell align="center"><Box display="flex" gap={1} justifyContent="center"><Button size="small" variant="outlined" color="warning" onClick={() => onEditBoq(b)} sx={styles.editButton}>EDIT</Button><Button size="small" variant="outlined" color="error" onClick={() => deleteMasterBoq(b.id, `${b.itemCode} - ${b.description}`)} sx={styles.deleteButton}>DELETE</Button></Box></TableCell>
-                                    </TableRow>
+                                    <React.Fragment key={rowKey}>
+                                        <TableRow hover onClick={() => toggleDesc(rowKey)} sx={{ cursor: 'pointer', transition: 'all 0.2s', '&:hover': { bgcolor: 'rgba(59, 130, 246, 0.05)' } }}>
+                                            <TableCell sx={styles.bodyCellCode}>{b.itemCode || '-'}</TableCell>
+                                            <TableCell sx={{ ...styles.bodyCellDesc, whiteSpace: isExpanded ? 'pre-wrap' : 'nowrap', wordBreak: isExpanded ? 'break-word' : 'normal', color: isExpanded ? 'primary.main' : 'inherit', py: isExpanded ? 2 : 1 }}>
+                                                <span style={{ marginRight: '8px', fontSize: '10px', opacity: 0.7 }}>{isExpanded ? '▼' : '▶'}</span>
+                                                {b.description}
+                                            </TableCell>
+                                            <TableCell sx={styles.bodyCellUnit}>{b.unit}</TableCell>
+                                            <TableCell align="center"><Box display="flex" gap={1} justifyContent="center" onClick={e => e.stopPropagation()}><Button size="small" variant="outlined" color="warning" onClick={() => onEditBoq(b)} sx={styles.editButton}>EDIT</Button><Button size="small" variant="outlined" color="error" onClick={() => deleteMasterBoq(b.id, `${b.itemCode} - ${b.description}`)} sx={styles.deleteButton}>DELETE</Button></Box></TableCell>
+                                        </TableRow>
+                                    </React.Fragment>
                                 );
                             })
                         ) : (<TableRow><TableCell colSpan={4} align="center" sx={styles.noItemsCell}>NO_MATCHING_ITEMS</TableCell></TableRow>)}

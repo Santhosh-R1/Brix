@@ -7,7 +7,7 @@ import {
     Box, Button, Typography, Paper, Grid, Alert, Tabs, Tab, TextField, MenuItem,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Chip,
     TablePagination, TableSortLabel, InputAdornment, Divider,
-    Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions
+    Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip
 } from "@mui/material";
 import DownloadIcon from '@mui/icons-material/Download';
 import UploadIcon from '@mui/icons-material/Upload';
@@ -117,7 +117,9 @@ function MasterBOQTab({ masterBoqs, regions, resources, editMasterBoq, deleteMas
                             return (
                                 <TableRow key={b.id} hover>
                                     <TableCell sx={{ fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px' }}>{b.itemCode || '-'}</TableCell>
-                                    <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px' }}>{b.description}</TableCell>
+                                    <TableCell sx={{ maxWidth: colWidths.desc, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px' }}>
+                                        {b.description}
+                                    </TableCell>
                                     <TableCell sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '13px' }}>{b.unit}</TableCell>
                                     <TableCell sx={{ fontWeight: 'bold', color: previewRegion ? 'success.main' : 'text.disabled', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px' }}>{previewRegion ? `₹ ${rate.toFixed(2)}` : 'SELECT_REGION'}</TableCell>
                                     <TableCell align="center">
