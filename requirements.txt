@@ -10,3 +10,5 @@ pandas
 scikit-learn
 openpyxl
 xlrd
+google-genai
+python-dotenv

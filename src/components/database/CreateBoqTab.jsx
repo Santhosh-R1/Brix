@@ -44,15 +44,31 @@ export default function CreateBoqTab({ regions, resources, masterBoqs, loadData,
                 
                 if (data.components && Array.isArray(data.components)) {
                     const newRows = data.components.map(comp => {
-                        const rMatch = resources.find(r => (r.code || r.itemCode) === String(comp.code));
-                        if (rMatch) {
-                            return { id: crypto.randomUUID(), itemType: "resource", itemId: rMatch.id, formulaStr: String(comp.qty), qty: Number(comp.qty) };
+                        const isAssemblyFormat = String(comp.code).includes('.'); 
+                        
+                        if (isAssemblyFormat) {
+                            const bMatch = masterBoqs.find(b => (b.code || b.itemCode) === String(comp.code));
+                            return { 
+                                id: crypto.randomUUID(), 
+                                itemType: "boq", 
+                                itemId: bMatch ? bMatch.id : "", 
+                                tempCode: String(comp.code), 
+                                tempDesc: comp.desc ? String(comp.desc) : "", 
+                                formulaStr: String(comp.qty), 
+                                qty: Number(comp.qty) 
+                            };
+                        } else {
+                            const rMatch = resources.find(r => (r.code || r.itemCode) === String(comp.code));
+                            return { 
+                                id: crypto.randomUUID(), 
+                                itemType: "resource", 
+                                itemId: rMatch ? rMatch.id : "", 
+                                tempCode: String(comp.code), 
+                                tempDesc: comp.desc ? String(comp.desc) : "", 
+                                formulaStr: String(comp.qty), 
+                                qty: Number(comp.qty) 
+                            };
                         }
-                        const bMatch = masterBoqs.find(b => (b.code || b.itemCode) === String(comp.code));
-                        if (bMatch) {
-                            return { id: crypto.randomUUID(), itemType: "boq", itemId: bMatch.id, formulaStr: String(comp.qty), qty: Number(comp.qty) };
-                        }
-                        return { id: crypto.randomUUID(), itemType: "resource", itemId: "", tempCode: String(comp.code), tempDesc: "", formulaStr: String(comp.qty), qty: Number(comp.qty) };
                     });
                     
                     setBoqRows(prev => [...prev, ...newRows]);
@@ -296,7 +312,7 @@ export default function CreateBoqTab({ regions, resources, masterBoqs, loadData,
                             return (
                                 <TableRow key={row.id}>
                                     <TableCell sx={styles.bodyCellText}>{idx + 1}</TableCell>
-                                    <TableCell><select value={row.itemType} onChange={e => updateSpreadsheetRow(row.id, 'itemType', e.target.value)} style={nativeStyles.selectActive}><option value="resource" style={nativeStyles.optionActive}>RESOURCE</option><option value="boq" style={nativeStyles.optionActive}>DATABOOK_ITEM</option></select></TableCell>
+                                    <TableCell><select value={row.itemType} onChange={e => updateSpreadsheetRow(row.id, 'itemType', e.target.value)} style={nativeStyles.selectActive}><option value="resource" style={nativeStyles.optionActive}>RESOURCE</option><option value="boq" style={nativeStyles.optionActive}>DATABOOK</option></select></TableCell>
 
                                     <TableCell>
                                         <input

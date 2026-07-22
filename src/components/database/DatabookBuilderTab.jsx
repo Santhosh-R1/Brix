@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { getResourceRate, calculateMasterBoqRate } from "../engines/calculationEngine";
 import { tableInputStyle, tableInputActiveStyle } from "../styles";
-import BackupTab from "./backuptab"; // 🔥 Integrated your BackupTab!
+import BackupTab from "./backuptab"; 
 import {
     Box, Button, Typography, Paper, Grid, Alert, Tabs, Tab, TextField, MenuItem,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Chip,
@@ -145,9 +145,6 @@ export default function DatabaseEditor({ onBack }) {
     const [regions, setRegions] = useState([]);
     const [resources, setResources] = useState([]);
     const [masterBoqs, setMasterBoqs] = useState([]);
-
-    // 🔥 BULLETPROOF DATA LOADER
-    // This catches raw strings/nulls from SQLite and forcefully parses them into safe objects so React never crashes.
     const loadData = async () => {
         try {
             const [reg, res, boqs] = await Promise.all([
@@ -156,7 +153,6 @@ export default function DatabaseEditor({ onBack }) {
                 window.api.db.getMasterBoqs()
             ]);
 
-            // Defensively ensure 'rates' is always an object
             const safeRes = (res || []).map(r => {
                 let parsedRates = {};
                 if (typeof r.rates === 'string') { try { parsedRates = JSON.parse(r.rates); } catch (e) { } }
@@ -164,7 +160,6 @@ export default function DatabaseEditor({ onBack }) {
                 return { ...r, rates: parsedRates };
             });
 
-            // Defensively ensure 'components' is always an array
             const safeBoqs = (boqs || []).map(b => {
                 let parsedComps = [];
                 if (typeof b.components === 'string') { try { parsedComps = JSON.parse(b.components); } catch (e) { } }

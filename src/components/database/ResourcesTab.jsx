@@ -3,10 +3,11 @@ import {
     Box, Button, Typography, Paper, Grid, TextField, MenuItem, Table,
     TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton,
     InputAdornment, Pagination, Divider, alpha, useTheme, InputBase, Backdrop,
-    CircularProgress, LinearProgress, FormControlLabel, Switch
+    CircularProgress, LinearProgress, FormControlLabel, Switch, Checkbox
 } from "@mui/material";
 import SearchIcon from '@mui/icons-material/Search';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import UploadIcon from '@mui/icons-material/Upload';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
@@ -104,12 +105,21 @@ const ResourceRow = memo(({
     handleOpenBrandChart,
     handleOpenAIPredictionModal,
     openDeleteResourceModal,
+    isSelected,
+    onSelect,
     ghostInputStyle,
     theme
 }) => {
     const styles = getResourcesTabStyles(theme);
     return (
         <TableRow hover sx={styles.resourceRow(index)}>
+            <TableCell padding="checkbox">
+                <Checkbox
+                    color="primary"
+                    checked={isSelected}
+                    onChange={(e) => onSelect(res.id, e.target.checked)}
+                />
+            </TableCell>
             <TableCell sx={styles.indexCell}>
                 {(currentPage - 1) * itemsPerPage + index + 1}
             </TableCell>
@@ -151,7 +161,7 @@ const ResourceRow = memo(({
                     <IconButton size="small" color="secondary" onClick={() => handleOpenBrandChart(res)} sx={styles.chartIcon} title="Brand Price Chart">
                         <BarChartIcon fontSize="small" />
                     </IconButton>
-                    <IconButton size="small" color="error" onClick={() => openDeleteResourceModal(res.id, res.description)} sx={styles.deleteIcon}>
+                    <IconButton size="small" color="error" onClick={() => openDeleteResourceModal(res.id, res.description, res.code)} sx={styles.deleteIcon}>
                         <DeleteIcon fontSize="small" />
                     </IconButton>
                 </Box>
@@ -239,6 +249,18 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
     const [uploadStatus, setUploadStatus] = useState({ active: false, current: 0, total: 0, status: 'idle', message: '' });
     const [predictions, setPredictions] = useState({});
     const [predictionsLoading, setPredictionsLoading] = useState(false);
+    
+    // 🔥 BULK SELECTION STATE
+    const [selectedIds, setSelectedIds] = useState(new Set());
+
+    const handleSelectRow = useCallback((id, checked) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (checked) next.add(id);
+            else next.delete(id);
+            return next;
+        });
+    }, []);
 
     useEffect(() => {
         const fetchPredictions = async () => {
@@ -398,8 +420,8 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
     // --- LOGIC HANDLERS ---
 
     // Triggered when user clicks delete icon on a resource row
-    const openDeleteResourceModal = useCallback((id, description) => {
-        setDeleteConfig({ open: true, id, name: description, type: 'resource' });
+    const openDeleteResourceModal = useCallback((id, description, code) => {
+        setDeleteConfig({ open: true, id, name: description, type: 'resource', code });
     }, []);
 
     // Triggered when user clicks delete icon on a region (if you add that UI)
@@ -409,12 +431,57 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
 
     // The actual API call after confirmation
     const handleConfirmDelete = async () => {
-        if (deleteConfig.type === 'resource') {
-            await window.api.db.deleteResource(deleteConfig.id);
+        if (deleteConfig.type === 'bulk') {
+            for (const id of selectedIds) {
+                const res = resources.find(r => r.id === id);
+                if (!res) continue;
+                
+                // Find all hidden duplicates in the Postgres database and purge them
+                const duplicates = resources.filter(r => 
+                    (r.code || "").toLowerCase().trim() === (res.code || "").toLowerCase().trim()
+                );
+                for (const dup of duplicates) {
+                    await window.api.db.deleteResource(dup.id);
+                }
+                
+                try {
+                    if (res.code) {
+                        const baseUrl = import.meta.env.VITE_PYTHON_API_URL || 'http://127.0.0.1:8000';
+                        await fetch(`${baseUrl}/api/ml/training-data/${encodeURIComponent(res.code)}`, {
+                            method: 'DELETE'
+                        });
+                    }
+                } catch (err) {
+                    console.error("Failed to bulk delete from ML backend:", err);
+                }
+            }
+            setSelectedIds(new Set());
+        } else if (deleteConfig.type === 'resource') {
+            if (deleteConfig.code) {
+                // Find all hidden duplicates in the Postgres database and purge them
+                const duplicates = resources.filter(r => 
+                    (r.code || "").toLowerCase().trim() === (deleteConfig.code || "").toLowerCase().trim()
+                );
+                for (const dup of duplicates) {
+                    await window.api.db.deleteResource(dup.id);
+                }
+            } else {
+                await window.api.db.deleteResource(deleteConfig.id);
+            }
+            try {
+                if (deleteConfig.code) {
+                    const baseUrl = import.meta.env.VITE_PYTHON_API_URL || 'http://127.0.0.1:8000';
+                    await fetch(`${baseUrl}/api/ml/training-data/${encodeURIComponent(deleteConfig.code)}`, {
+                        method: 'DELETE'
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to delete from ML backend:", err);
+            }
         } else if (deleteConfig.type === 'region') {
             await window.api.db.deleteRegion(deleteConfig.id);
         }
-        setDeleteConfig({ open: false, id: null, name: "", type: null });
+        setDeleteConfig({ open: false, id: null, name: "", type: null, code: null });
         loadData();
     };
 
@@ -809,11 +876,13 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                 handleOpenBrandChart={handleOpenBrandChart}
                 handleOpenAIPredictionModal={handleOpenAIPredictionModal}
                 openDeleteResourceModal={openDeleteResourceModal}
+                isSelected={selectedIds.has(res.id)}
+                onSelect={handleSelectRow}
                 ghostInputStyle={ghostInputStyle}
                 theme={theme}
             />
         );
-    }), [currentPage, openDeleteResourceModal, paginatedResources, theme, handleOpenBrandModal, handleOpenBrandChart, handleOpenAIPredictionModal, selectedRegion, ghostInputStyle, itemsPerPage, handleSaveRate, predictions]);
+    }), [currentPage, openDeleteResourceModal, paginatedResources, theme, handleOpenBrandModal, handleOpenBrandChart, handleOpenAIPredictionModal, selectedRegion, ghostInputStyle, itemsPerPage, handleSaveRate, predictions, selectedIds, handleSelectRow]);
 
     return (
         <Box>
@@ -961,9 +1030,40 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
 
             {/* 🔥 BEAUTIFIED EXCEL-STYLE TABLE */}
             <TableContainer component={Paper} elevation={0} sx={styles.tableContainer}>
+                {selectedIds.size > 0 && (
+                    <Box sx={{ p: 2, display: 'flex', alignItems: 'center', bgcolor: 'rgba(255, 23, 68, 0.1)', borderBottom: '1px solid rgba(255, 23, 68, 0.2)' }}>
+                        <Typography variant="subtitle2" sx={{ flexGrow: 1, color: '#ff1744', fontWeight: 'bold' }}>
+                            {selectedIds.size} ITEMS SELECTED
+                        </Typography>
+                        <Button 
+                            variant="contained" 
+                            color="error" 
+                            startIcon={<DeleteSweepIcon />}
+                            onClick={() => setDeleteConfig({ open: true, type: 'bulk', count: selectedIds.size })}
+                        >
+                            BULK DELETE
+                        </Button>
+                    </Box>
+                )}
                 <Table size="small" sx={styles.table}>
                     <TableHead sx={styles.tableHead}>
                         <TableRow>
+                            <TableCell padding="checkbox">
+                                <Checkbox
+                                    color="primary"
+                                    indeterminate={paginatedResources.length > 0 && paginatedResources.some(r => selectedIds.has(r.id)) && !paginatedResources.every(r => selectedIds.has(r.id))}
+                                    checked={paginatedResources.length > 0 && paginatedResources.every(r => selectedIds.has(r.id))}
+                                    onChange={(e) => {
+                                        const newIds = new Set(selectedIds);
+                                        if (e.target.checked) {
+                                            paginatedResources.forEach(r => newIds.add(r.id));
+                                        } else {
+                                            paginatedResources.forEach(r => newIds.delete(r.id));
+                                        }
+                                        setSelectedIds(newIds);
+                                    }}
+                                />
+                            </TableCell>
                             <TableCell sx={styles.headerCellNo}>NO</TableCell>
                             <TableCell sx={styles.headerCellCode}>CODE</TableCell>
                             <TableCell sx={styles.headerCell}>DESCRIPTION</TableCell>
@@ -1041,7 +1141,7 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                 open={deleteConfig.open}
                 onClose={() => setDeleteConfig({ ...deleteConfig, open: false })}
                 onConfirm={handleConfirmDelete}
-                itemName={deleteConfig.name}
+                itemName={deleteConfig.type === 'bulk' ? `${deleteConfig.count} selected items` : deleteConfig.name}
             />
 
             {/* EXCEL UPLOAD PROGRESS OVERLAY */}

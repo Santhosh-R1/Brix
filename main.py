@@ -12,7 +12,13 @@ import math
 import cv2
 import numpy as np
 import os
+from dotenv import load_dotenv
+from google import genai
+import json
+from pydantic import BaseModel
 import requests
+
+load_dotenv()
 import shapely.geometry as sg
 from shapely.ops import unary_union, polygonize
 import networkx as nx
@@ -1004,11 +1010,13 @@ async def train_predict_ml(
             
         # Standardize the incoming data for all 3 months of the quarter
         dfs = []
+        has_code = 'Code' in df.columns
         for m in months:
             m_df = pd.DataFrame({
                 'Year': past_year,
                 'Month': m,
                 'Region': region,
+                'Code': df['Code'].astype(str).str.strip() if has_code else '',
                 'Resource': df['Description'],
                 'Rate': pd.to_numeric(df['Lmr Rate (₹)'], errors='coerce')
             })
@@ -1020,31 +1028,43 @@ async def train_predict_ml(
         new_data = new_data.dropna(subset=['Resource', 'Rate'])
         
         # Clean up resource names to prevent duplicates from whitespaces
-        new_data['Resource'] = new_data['Resource'].str.strip()
+        new_data['Resource'] = new_data['Resource'].astype(str).str.strip()
         
         # Cumulative training: append to a persistent CSV
         history_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "core", "market_training_data.csv")
         if os.path.exists(history_file) and os.path.getsize(history_file) > 0:
-            history_df = pd.read_csv(history_file)
+            history_df = pd.read_csv(history_file, dtype={'Code': str}, low_memory=False)
             if 'Region' not in history_df.columns:
                 history_df['Region'] = region
+            if 'Code' not in history_df.columns:
+                history_df['Code'] = ''
+                
             history_df['Rate'] = pd.to_numeric(history_df['Rate'], errors='coerce')
+            history_df['Resource'] = history_df['Resource'].astype(str).str.strip()
+            history_df['Code'] = history_df['Code'].fillna('').astype(str).str.strip()
             
-            # Clean historical resource names to fix existing whitespace duplicates
-            history_df['Resource'] = history_df['Resource'].str.strip()
-            
-            # Check for duplicates: if any of the new rows already exist in history with the same (Year, Month, Region)
-            duplicate_check = history_df[
+            # Filter to current region and quarter
+            existing_subset = history_df[
                 (history_df['Year'] == past_year) & 
                 (history_df['Region'].str.lower() == region.lower()) & 
                 (history_df['Month'].isin(months))
             ]
-            if not duplicate_check.empty:
-                return {"error": f"Training data for {region} ({quarter} {past_year}) already exists in the database. Duplicate uploads are not allowed."}
+            
+            # Create a unique key using both Code and Resource
+            def make_key(row):
+                return f"{row.get('Code', '')}::{row.get('Resource', '')}"
+                
+            existing_items = set(existing_subset.apply(make_key, axis=1))
+            new_items = set(new_data.apply(make_key, axis=1))
+            
+            overlapping = new_items.intersection(existing_items)
+            
+            if overlapping:
+                return {"error": f"Training data for these specific items already exists in {region} ({quarter} {past_year}). Duplicate item uploads are not allowed."}
 
             history_df = pd.concat([history_df, new_data])
             # Keep only the latest entry if the same quarter/year/region is uploaded twice
-            history_df = history_df.drop_duplicates(subset=['Year', 'Month', 'Region', 'Resource'], keep='last')
+            history_df = history_df.drop_duplicates(subset=['Year', 'Month', 'Region', 'Code', 'Resource'], keep='last')
         else:
             history_df = new_data
             
@@ -1108,7 +1128,7 @@ def get_history_df():
         
     current_mtime = os.path.getmtime(history_file)
     if _cached_history_df is None or current_mtime != _cache_mtime:
-        _cached_history_df = pd.read_csv(history_file)
+        _cached_history_df = pd.read_csv(history_file, dtype={'Code': str}, low_memory=False)
         if 'Region' not in _cached_history_df.columns:
             _cached_history_df['Region'] = "Default"
         _cache_mtime = current_mtime
@@ -1116,6 +1136,34 @@ def get_history_df():
         _future_predictions_cache.clear()
         
     return _cached_history_df
+
+@app.delete("/api/ml/training-data/{code}")
+def delete_training_data(code: str):
+    history_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "core", "market_training_data.csv")
+    if not os.path.exists(history_file) or os.path.getsize(history_file) == 0:
+        return {"success": True, "message": "File does not exist or empty."}
+        
+    try:
+        df = pd.read_csv(history_file, dtype={'Code': str}, low_memory=False)
+        
+        if 'Code' not in df.columns:
+            # Fallback for old files without Code column
+            df = df[df['Resource'].astype(str).str.strip() != code.strip()]
+        else:
+            # Filter out the deleted code
+            df['Code'] = df['Code'].fillna('').astype(str).str.strip()
+            df = df[df['Code'] != code.strip()]
+            
+        df.to_csv(history_file, index=False)
+        
+        global _cached_history_df, _cache_mtime, _predictions_cache, _future_predictions_cache
+        _cached_history_df = None
+        _predictions_cache.clear()
+        _future_predictions_cache.clear()
+        
+        return {"success": True}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/api/ml/predictions")
 async def get_latest_predictions(region: str = None):
@@ -1307,14 +1355,15 @@ async def extract_assembly_pdf(file: UploadFile):
         url = "https://openrouter.ai/api/v1/chat/completions"
         
         prompt = (
-            "Extract ONLY the sub-component resource items (e.g., Labour, Materials, Machinery) from the following Data Analysis PDF text. "
-            "Do NOT extract the main header assembly item (e.g., do not extract the 2.1.1 or its Header Quantity). "
-            "For each sub-component item, extract its Code (which usually appears under 'Sor/Spec Code' or 'MR Code' columns, e.g., '0115', '0114', '9999') and its Quantity. "
+            "Extract ALL the sub-component items (which can be Resources like Labour, Materials, Machinery, Carriage OR nested sub-assemblies/databook items) from the following Data Analysis PDF text. "
+            "Do NOT extract the main header assembly item that this page is about (e.g., do not extract the main title code like 11.41.2 if it's at the top of the page representing the whole assembly). "
+            "However, you MUST extract any sub-assemblies listed inside the table (often found under the 'Subdata' section with short codes like '3.9' or '3.3'). "
+            "For each sub-component item, extract its Code (which usually appears under 'Sor/Spec Code', 'MR Code', or 'Item Code' columns, e.g., '0115', '9988', '13.7.1', '3.9'), its Description, and its Quantity. "
+            "ALSO, locate the 'Header Quantity' for the main assembly (e.g., 10.0, 1.0) which is usually listed at the top under 'Header Quantity' or 'Details of cost for X sqm/cum'. "
             "CRITICAL EXCEPTION HANDLING: This is a multi-page PDF. A table row is often split perfectly across a page break! "
-            "This means a Code might be the very last item at the bottom of one page, but its description and Quantity are pushed to the top of the NEXT page. "
             "You MUST ignore the page headers/footers in between and seamlessly connect the Code from the bottom of ANY page to the Quantity at the top of the NEXT page to reconstruct the item. "
-            "Return ONLY a valid JSON array of objects, with exactly two keys: 'code' (string) and 'qty' (number). "
-            "Ensure 'code' is a string exactly as it appears. Do not include any markdown formatting, backticks, or other text. Just the raw JSON array.\n\n"
+            "Return ONLY a valid JSON object with two keys: 'header_quantity' (number) and 'components' (a JSON array of objects, each with exactly three keys: 'code' (string), 'desc' (string), and 'qty' (number)). "
+            "Ensure 'code' is a string exactly as it appears. Do not include any markdown formatting, backticks, or other text. Just the raw JSON object.\n\n"
             f"TEXT:\n{text[:40000]}"
         )
         
@@ -1342,7 +1391,25 @@ async def extract_assembly_pdf(file: UploadFile):
                     result_text = resp.json()["choices"][0]["message"]["content"]
                     result_text = re.sub(r'```json\s*', '', result_text)
                     result_text = re.sub(r'```\s*', '', result_text).strip()
-                    res_data = json.loads(result_text)
+                    parsed = json.loads(result_text)
+                    
+                    if isinstance(parsed, list):
+                        components = parsed
+                        header_qty = 1.0
+                    else:
+                        components = parsed.get("components", [])
+                        header_qty = float(parsed.get("header_quantity", 1.0))
+                    
+                    if header_qty <= 0:
+                        header_qty = 1.0
+                        
+                    for comp in components:
+                        try:
+                            comp['qty'] = round(float(comp['qty']) / header_qty, 5)
+                        except (ValueError, TypeError, KeyError):
+                            pass
+                            
+                    res_data = components
                     break
             except Exception as e:
                 print(f"Model {model_id} failed: {e}")
@@ -1664,3 +1731,56 @@ async def get_resource_history(resource: str, region: str = None):
         import traceback
         traceback.print_exc()
         return {"error": str(e)}   
+
+class BrandSuggestionRequest(BaseModel):
+    resource: str
+    region: str
+    unit: str
+    period: str
+
+@app.post("/api/ml/ai-brand-suggestions")
+async def ai_brand_suggestions(req: BrandSuggestionRequest):
+    try:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return {"error": "GEMINI_API_KEY is missing from environment"}
+            
+        client = genai.Client(api_key=api_key)
+        
+        prompt = f"""You are an expert construction estimator in Kerala, India. 
+Suggest 3 common brands and their exact current local market rates for the resource '{req.resource}' 
+with unit '{req.unit}' in the region '{req.region}' for the period '{req.period}'.
+
+Respond STRICTLY with a valid JSON array of objects, where each object has the keys 'brand' (string) and 'price' (number).
+Do not include markdown codeblocks (like ```json), no markdown formatting, and no other text. Just the raw JSON array.
+Example format:
+[
+  {{"brand": "Brand A", "price": 120.50}},
+  {{"brand": "Brand B", "price": 115.00}}
+]
+"""
+        
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=prompt
+        )
+        text = response.text.strip()
+        
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        
+        text = text.strip()
+        suggestions = json.loads(text)
+        
+        return {"success": True, "suggestions": suggestions}
+    except json.JSONDecodeError as e:
+        print(f"JSON Parse Error: {e}\nRaw output: {response.text if 'response' in locals() else ''}")
+        return {"error": "Failed to parse AI response into JSON format"}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
