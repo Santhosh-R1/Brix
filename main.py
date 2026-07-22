@@ -1079,21 +1079,30 @@ async def train_predict_ml(
         # Train and Predict for each resource using fast groupby
         for resource, resource_df in predict_df.groupby('Resource'):
             
+            res_df = resource_df.copy()
+            res_df['Year'] = pd.to_numeric(res_df['Year'], errors='coerce')
+            res_df['Month'] = pd.to_numeric(res_df['Month'], errors='coerce')
+            res_df['Rate'] = pd.to_numeric(res_df['Rate'], errors='coerce')
+            res_df = res_df.dropna(subset=['Year', 'Month', 'Rate'])
+
+            if res_df.empty:
+                continue
+            
             # Find the last date in the history for this resource
-            last_year = resource_df['Year'].max()
-            last_month = resource_df[resource_df['Year'] == last_year]['Month'].max()
+            last_year = res_df['Year'].max()
+            last_month = res_df[res_df['Year'] == last_year]['Month'].max()
             last_date = pd.to_datetime(f"{int(last_year)}-{int(last_month):02d}-01")
             
             future_dates = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=months_to_predict, freq='ME')
             
-            if len(resource_df) < 2:
+            if len(res_df) < 2:
                 # Not enough data for ML, just forward-fill the last known rate
-                last_rate = resource_df['Rate'].iloc[-1]
+                last_rate = res_df['Rate'].iloc[-1]
                 pred_rates = [last_rate] * months_to_predict
             else:
                 # Train Polynomial Ridge for capturing complex non-linear market trends much faster
-                X = pd.DataFrame({'Time_Index': resource_df['Year'] + (resource_df['Month'] - 1) / 12})
-                y = resource_df['Rate']
+                X = pd.DataFrame({'Time_Index': res_df['Year'] + (res_df['Month'] - 1) / 12})
+                y = res_df['Rate']
                 
                 model = make_pipeline(PolynomialFeatures(degree=2), BayesianRidge())
                 model.fit(X, y)
@@ -1128,9 +1137,13 @@ def get_history_df():
         
     current_mtime = os.path.getmtime(history_file)
     if _cached_history_df is None or current_mtime != _cache_mtime:
-        _cached_history_df = pd.read_csv(history_file, dtype={'Code': str}, low_memory=False)
-        if 'Region' not in _cached_history_df.columns:
-            _cached_history_df['Region'] = "Default"
+        df = pd.read_csv(history_file, dtype={'Code': str}, low_memory=False)
+        if 'Region' not in df.columns:
+            df['Region'] = "Default"
+        df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
+        df['Month'] = pd.to_numeric(df['Month'], errors='coerce')
+        df['Rate'] = pd.to_numeric(df['Rate'], errors='coerce')
+        _cached_history_df = df.dropna(subset=['Year', 'Month', 'Rate'])
         _cache_mtime = current_mtime
         _predictions_cache.clear()
         _future_predictions_cache.clear()
@@ -1183,17 +1196,26 @@ async def get_latest_predictions(region: str = None):
         
         for resource, resource_df in history_df.groupby('Resource'):
             
-            last_year = resource_df['Year'].max()
-            last_month = resource_df[resource_df['Year'] == last_year]['Month'].max()
+            res_df = resource_df.copy()
+            res_df['Year'] = pd.to_numeric(res_df['Year'], errors='coerce')
+            res_df['Month'] = pd.to_numeric(res_df['Month'], errors='coerce')
+            res_df['Rate'] = pd.to_numeric(res_df['Rate'], errors='coerce')
+            res_df = res_df.dropna(subset=['Year', 'Month', 'Rate'])
+
+            if res_df.empty:
+                continue
+            
+            last_year = res_df['Year'].max()
+            last_month = res_df[res_df['Year'] == last_year]['Month'].max()
             last_date = pd.to_datetime(f"{int(last_year)}-{int(last_month):02d}-01")
             
             future_dates = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=1, freq='ME')
             
-            if len(resource_df) < 2:
-                pred_rates = [resource_df['Rate'].iloc[-1]]
+            if len(res_df) < 2:
+                pred_rates = [res_df['Rate'].iloc[-1]]
             else:
-                X = pd.DataFrame({'Time_Index': resource_df['Year'] + (resource_df['Month'] - 1) / 12})
-                y = resource_df['Rate']
+                X = pd.DataFrame({'Time_Index': res_df['Year'] + (res_df['Month'] - 1) / 12})
+                y = res_df['Rate']
                 model = BayesianRidge()
                 model.fit(X, y)
                 future_X = pd.DataFrame({'Time_Index': future_dates.year + (future_dates.month - 1) / 12})
@@ -1201,7 +1223,7 @@ async def get_latest_predictions(region: str = None):
                 
             predictions[str(resource).strip()] = {
                 "predicted_rate": round(float(pred_rates[0]), 2),
-                "actual_rate": float(resource_df['Rate'].iloc[-1])
+                "actual_rate": float(res_df['Rate'].iloc[-1])
             }
             
         _predictions_cache[region] = predictions
@@ -1276,6 +1298,11 @@ async def get_future_predictions(request: FuturePredictionsRequest):
             
         target_X = np.array(target_features)
         
+        work_df['Year'] = pd.to_numeric(work_df['Year'], errors='coerce')
+        work_df['Month'] = pd.to_numeric(work_df['Month'], errors='coerce')
+        work_df['Rate'] = pd.to_numeric(work_df['Rate'], errors='coerce')
+        work_df = work_df.dropna(subset=['Year', 'Month', 'Rate'])
+
         work_df['Time_Index'] = work_df['Year'] + (work_df['Month'] - 1) / 12
         work_df['Month_Sin'] = np.sin(2 * np.pi * work_df['Month'] / 12)
         work_df['Month_Cos'] = np.cos(2 * np.pi * work_df['Month'] / 12)
