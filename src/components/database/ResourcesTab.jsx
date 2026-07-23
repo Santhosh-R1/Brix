@@ -248,16 +248,32 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
             try {
                 const res = await window.api.db.getSettings('lmr_categories');
                 if (res && isMounted) {
-                    const rawVal = typeof res === 'string' ? res : (res.value || res.data || '');
-                    if (rawVal) {
-                        const parsed = JSON.parse(rawVal);
-                        if (Array.isArray(parsed) && parsed.length > 0) {
-                            setLmrCategories(parsed);
-                            return;
+                    let catArray = null;
+                    if (Array.isArray(res)) {
+                        catArray = res;
+                    } else if (typeof res === 'string') {
+                        try {
+                            const parsed = JSON.parse(res);
+                            if (Array.isArray(parsed)) catArray = parsed;
+                        } catch (e) {}
+                    } else if (typeof res === 'object') {
+                        const val = res.value !== undefined ? res.value : (res.data?.value !== undefined ? res.data.value : res.data);
+                        if (Array.isArray(val)) {
+                            catArray = val;
+                        } else if (typeof val === 'string') {
+                            try {
+                                const parsed = JSON.parse(val);
+                                if (Array.isArray(parsed)) catArray = parsed;
+                            } catch (e) {}
                         }
                     }
+
+                    if (Array.isArray(catArray) && catArray.length > 0) {
+                        setLmrCategories(catArray);
+                        return;
+                    }
                 }
-                // Initialize DB with default categories if not set yet
+                // Initialize DB with default categories ONLY if no settings exist in DB yet
                 await window.api.db.saveSettings('lmr_categories', JSON.stringify(DEFAULT_LMR_GROUPS));
             } catch (e) {
                 console.error("Error fetching LMR categories from database:", e);
@@ -339,7 +355,20 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
 
         // 2. Delete ALL data / resource records in database belonging to this category
         const itemsToDelete = resources.filter(r => {
-            const resCat = r.rates?._category || r.category || (lmrCategories[0] === targetCat ? targetCat : null);
+            let resCat = r.category;
+            if (!resCat && r.rates) {
+                if (typeof r.rates === 'string') {
+                    try {
+                        const parsed = JSON.parse(r.rates);
+                        resCat = parsed?._category;
+                    } catch (e) {}
+                } else if (typeof r.rates === 'object') {
+                    resCat = r.rates._category;
+                }
+            }
+            if (!resCat && lmrCategories[0] === targetCat) {
+                resCat = targetCat;
+            }
             return resCat === targetCat;
         });
 
@@ -1104,10 +1133,7 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                                         if (e.target.value === '__ADD_NEW_LMR_CATEGORY__') {
                                             setAddCategoryDialogOpen(true);
                                         } else {
-                                            const val = e.target.value;
-                                            setImportLmrCategory(val);
-                                            setSelectedLmrFilter(val);
-                                            setCurrentPage(1);
+                                            setImportLmrCategory(e.target.value);
                                         }
                                     }}
                                     SelectProps={{

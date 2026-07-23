@@ -91,38 +91,42 @@ export default function ViewBoqTab({ masterBoqs, regions, resources, onEditBoq, 
 
     useEffect(() => {
         let isMounted = true;
+        const parseDbSettingArray = (res) => {
+            if (!res) return null;
+            if (Array.isArray(res)) return res;
+            if (typeof res === 'string') {
+                try {
+                    const parsed = JSON.parse(res);
+                    if (Array.isArray(parsed)) return parsed;
+                } catch (e) {}
+            }
+            if (typeof res === 'object') {
+                const val = res.value !== undefined ? res.value : (res.data?.value !== undefined ? res.data.value : res.data);
+                if (Array.isArray(val)) return val;
+                if (typeof val === 'string') {
+                    try {
+                        const parsed = JSON.parse(val);
+                        if (Array.isArray(parsed)) return parsed;
+                    } catch (e) {}
+                }
+            }
+            return null;
+        };
+
         const loadCategoriesFromDb = async () => {
             try {
-                // Fetch Civil databook custom categories from database
+                // Fetch Civil databook custom categories strictly from database
                 const civilRes = await window.api.db.getSettings('databook_categories_civil');
                 if (isMounted && civilRes) {
-                    const parsed = typeof civilRes === 'string' ? JSON.parse(civilRes) : civilRes;
+                    const parsed = parseDbSettingArray(civilRes);
                     if (Array.isArray(parsed)) setCivilCustomCats(parsed);
-                } else if (isMounted) {
-                    const legacy = localStorage.getItem("custom_categories_civil") || localStorage.getItem("custom_categories");
-                    if (legacy) {
-                        const parsed = JSON.parse(legacy);
-                        if (Array.isArray(parsed)) {
-                            setCivilCustomCats(parsed);
-                            await window.api.db.saveSettings('databook_categories_civil', JSON.stringify(parsed));
-                        }
-                    }
                 }
 
-                // Fetch Electrical databook custom categories from database
+                // Fetch Electrical databook custom categories strictly from database
                 const elecRes = await window.api.db.getSettings('databook_categories_electrical');
                 if (isMounted && elecRes) {
-                    const parsed = typeof elecRes === 'string' ? JSON.parse(elecRes) : elecRes;
+                    const parsed = parseDbSettingArray(elecRes);
                     if (Array.isArray(parsed)) setElectricalCustomCats(parsed);
-                } else if (isMounted) {
-                    const legacyElec = localStorage.getItem("custom_categories_electrical");
-                    if (legacyElec) {
-                        const parsed = JSON.parse(legacyElec);
-                        if (Array.isArray(parsed)) {
-                            setElectricalCustomCats(parsed);
-                            await window.api.db.saveSettings('databook_categories_electrical', JSON.stringify(parsed));
-                        }
-                    }
                 }
             } catch (e) {
                 console.error("Error loading databook categories from database:", e);
@@ -185,8 +189,10 @@ export default function ViewBoqTab({ masterBoqs, regions, resources, onEditBoq, 
 
     const handleDeleteCategory = async () => {
         if (!categoryToDelete) return;
+        const targetCat = categoryToDelete;
+
         if (discipline === "Civil") {
-            const updated = civilCustomCats.filter(cat => cat !== categoryToDelete);
+            const updated = civilCustomCats.filter(cat => cat !== targetCat);
             setCivilCustomCats(updated);
             try {
                 await window.api.db.saveSettings('databook_categories_civil', JSON.stringify(updated));
@@ -194,7 +200,7 @@ export default function ViewBoqTab({ masterBoqs, regions, resources, onEditBoq, 
                 console.error("Failed to delete civil category from database:", e);
             }
         } else {
-            const updated = electricalCustomCats.filter(cat => cat !== categoryToDelete);
+            const updated = electricalCustomCats.filter(cat => cat !== targetCat);
             setElectricalCustomCats(updated);
             try {
                 await window.api.db.saveSettings('databook_categories_electrical', JSON.stringify(updated));
@@ -202,12 +208,37 @@ export default function ViewBoqTab({ masterBoqs, regions, resources, onEditBoq, 
                 console.error("Failed to delete electrical category from database:", e);
             }
         }
-        if (selectedCategory === categoryToDelete) {
+
+        // Delete ALL master BOQ assembly entries in database belonging to this category
+        const matchPrefix = targetCat.match(/^([\d.]+)\./);
+        const sectionNum = matchPrefix ? matchPrefix[1] : null;
+
+        const itemsToDelete = (masterBoqs || []).filter(boq => {
+            if (boq.category === targetCat) return true;
+            if (sectionNum) {
+                const normCode = (boq.itemCode || '').trim();
+                if (normCode.startsWith(`${sectionNum}.`) || normCode === sectionNum) return true;
+            }
+            return false;
+        });
+
+        console.log(`[Databook Category Delete] Deleting ${itemsToDelete.length} master BOQ items for category "${targetCat}" from database...`);
+
+        for (const item of itemsToDelete) {
+            try {
+                await window.api.db.deleteMasterBoq(item.id);
+            } catch (err) {
+                console.error("Failed to delete master BOQ entry from database:", err);
+            }
+        }
+
+        if (selectedCategory === targetCat) {
             setSelectedCategory('');
             setPage(0);
         }
         setCategoryToDelete(null);
         setDeleteCategoryModalOpen(false);
+        if (typeof loadData === 'function') loadData();
     };
 
     const [colWidths, setColWidths] = useState({ code: 150, desc: 550, unit: 100, actions: 150 });
