@@ -55,22 +55,101 @@ export const getResourcesTabStyles = (theme) => ({
     },
 
     // Main ResourcesTab Top Controls
-    paperCard: { p: 3, bgcolor: alpha(theme.palette.background.paper, 0.3), border: '1px solid', borderColor: 'divider', borderRadius: 2 },
-    monoSubtitle: { fontFamily: "'JetBrains Mono', monospace" },
-    actionButton: { flexShrink: 0, fontFamily: "'JetBrains Mono', monospace" },
-    addRegionButton: { flexShrink: 0, fontFamily: "'JetBrains Mono', monospace", boxShadow: 'none' },
+    paperCard: {
+        p: { xs: 2.5, sm: 3 },
+        bgcolor: 'rgba(13, 21, 39, 0.75)',
+        border: '1px solid rgba(0, 229, 255, 0.18)',
+        borderRadius: 3,
+        boxShadow: '0 10px 32px rgba(0, 0, 0, 0.35)',
+        backdropFilter: 'blur(16px)',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        justify: 'space-between',
+        '&:hover': {
+            borderColor: 'rgba(0, 229, 255, 0.35)',
+            boxShadow: '0 12px 40px rgba(0, 229, 255, 0.12)'
+        }
+    },
+    monoSubtitle: { fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.5px' },
+    uploadButton: {
+        height: 40,
+        fontFamily: "'JetBrains Mono', monospace",
+        boxShadow: '0 4px 14px rgba(0, 229, 255, 0.25)',
+        fontSize: '12px',
+        fontWeight: 'bold',
+        letterSpacing: '0.8px',
+        borderRadius: 2,
+        background: 'linear-gradient(90deg, #00e5ff 0%, #0284c7 100%)',
+        color: '#0a101d',
+        '&:hover': {
+            background: 'linear-gradient(90deg, #0284c7 0%, #0369a1 100%)',
+            color: '#fff',
+            boxShadow: '0 6px 20px rgba(0, 229, 255, 0.4)'
+        },
+        '&.Mui-disabled': {
+            background: 'rgba(255,255,255,0.08)',
+            color: 'rgba(255,255,255,0.3)'
+        }
+    },
+    actionButton: {
+        height: 40,
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: '11px',
+        fontWeight: 'bold',
+        letterSpacing: '0.5px',
+        borderRadius: 2,
+        borderColor: 'rgba(255, 255, 255, 0.15)',
+        color: 'rgba(255, 255, 255, 0.85)',
+        '&:hover': {
+            borderColor: '#00e5ff',
+            bgcolor: 'rgba(0, 229, 255, 0.08)',
+            color: '#00e5ff'
+        }
+    },
+    addRegionButton: {
+        height: 40,
+        px: 3,
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: '12px',
+        fontWeight: 'bold',
+        letterSpacing: '0.5px',
+        borderRadius: 2,
+        background: 'linear-gradient(90deg, #8b5cf6 0%, #7c3aed 100%)',
+        boxShadow: '0 4px 14px rgba(139, 92, 246, 0.3)',
+        color: '#fff',
+        whiteSpace: 'nowrap',
+        '&:hover': {
+            background: 'linear-gradient(90deg, #7c3aed 0%, #6d28d9 100%)',
+            boxShadow: '0 6px 20px rgba(139, 92, 246, 0.4)'
+        },
+        '&.Mui-disabled': {
+            background: 'rgba(255,255,255,0.08)',
+            color: 'rgba(255,255,255,0.3)'
+        }
+    },
 
-    searchCard: { p: { xs: 2.5, sm: 3 }, mb: 3, bgcolor: alpha(theme.palette.background.paper, 0.3), border: '1px solid', borderColor: 'divider', borderTop: `3px solid ${theme.palette.primary.main}`, borderRadius: 2 },
-    sectionTitle: { fontFamily: "'JetBrains Mono', monospace", letterSpacing: '1px' },
+    searchCard: {
+        p: { xs: 2.5, sm: 3 },
+        mb: 3,
+        bgcolor: 'rgba(13, 21, 39, 0.75)',
+        border: '1px solid rgba(0, 229, 255, 0.18)',
+        borderTop: `3px solid ${theme.palette.primary.main}`,
+        borderRadius: 3,
+        boxShadow: '0 10px 32px rgba(0, 0, 0, 0.35)',
+        backdropFilter: 'blur(16px)'
+    },
+    sectionTitle: { fontFamily: "'JetBrains Mono', monospace", letterSpacing: '1px', color: '#fff' },
     switchControl: {
         '& .MuiFormControlLabel-label': {
             fontFamily: "'JetBrains Mono', monospace",
             fontSize: '11px',
-            color: 'rgba(255,255,255,0.6)',
+            color: 'rgba(255,255,255,0.7)',
             letterSpacing: '0.5px'
         }
     },
-    divider: { my: 2.5, borderColor: 'rgba(255,255,255,0.06)' },
+    divider: { my: 2.5, borderColor: 'rgba(255,255,255,0.08)' },
 
     // Main ResourcesTab Table
     tableContainer: { border: '1px solid', borderColor: 'divider', bgcolor: alpha(theme.palette.background.paper, 0.2), borderRadius: '8px 8px 0 0', overflowX: 'auto', height: 'auto' },

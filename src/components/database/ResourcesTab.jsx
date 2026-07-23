@@ -3,7 +3,8 @@ import {
     Box, Button, Typography, Paper, Grid, TextField, MenuItem, Table,
     TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton,
     InputAdornment, Pagination, Divider, alpha, useTheme, InputBase, Backdrop,
-    CircularProgress, LinearProgress, FormControlLabel, Switch, Checkbox
+    CircularProgress, LinearProgress, FormControlLabel, Switch, Checkbox,
+    Avatar, Chip, Dialog, DialogTitle, DialogContent, DialogActions, Alert
 } from "@mui/material";
 import SearchIcon from '@mui/icons-material/Search';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -15,6 +16,11 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import DownloadIcon from '@mui/icons-material/Download';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import PublicIcon from '@mui/icons-material/Public';
+import AddIcon from '@mui/icons-material/Add';
+import CategoryIcon from '@mui/icons-material/Category';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import { useSettings } from "../../context/SettingsContext";
 import { getResourcesTabStyles, getInflationDrawerStyles } from "./ResourcesTab.styles";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
@@ -211,6 +217,12 @@ const RegisterMaterialForm = memo(({ onRegister }) => {
     );
 });
 
+const DEFAULT_LMR_GROUPS = [
+    "LMRDSORCIVIL-DSOR CIVIL CODES ALL",
+    "LMRDSORELECTRICAL-DSOR ELECTRICAL CODES ALL",
+    "LMRCPWD1-MR CIVIL CODES FOR PWD"
+];
+
 export default function ResourcesTab({ regions, resources, masterBoqs = [], loadData }) {
     const theme = useTheme();
     const styles = getResourcesTabStyles(theme);
@@ -225,6 +237,158 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
     const currentQuarterIndex = Math.floor(currentMonth / 3);
     const [importYear, setImportYear] = useState(currentYear);
     const [importQuarter, setImportQuarter] = useState("JANMAR");
+
+    // 🔥 LMR GROUP / CATEGORIES STATE (PERMANENTLY STORED IN DATABASE)
+    const [lmrCategories, setLmrCategories] = useState(DEFAULT_LMR_GROUPS);
+
+    // Fetch categories from database settings on mount
+    useEffect(() => {
+        let isMounted = true;
+        const loadDbCategories = async () => {
+            try {
+                const res = await window.api.db.getSettings('lmr_categories');
+                if (res && isMounted) {
+                    const rawVal = typeof res === 'string' ? res : (res.value || res.data || '');
+                    if (rawVal) {
+                        const parsed = JSON.parse(rawVal);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            setLmrCategories(parsed);
+                            return;
+                        }
+                    }
+                }
+                // Initialize DB with default categories if not set yet
+                await window.api.db.saveSettings('lmr_categories', JSON.stringify(DEFAULT_LMR_GROUPS));
+            } catch (e) {
+                console.error("Error fetching LMR categories from database:", e);
+            }
+        };
+        loadDbCategories();
+        return () => { isMounted = false; };
+    }, []);
+
+    const [importLmrCategory, setImportLmrCategory] = useState(DEFAULT_LMR_GROUPS[0]);
+    const [selectedLmrFilter, setSelectedLmrFilter] = useState(DEFAULT_LMR_GROUPS[0]);
+
+    useEffect(() => {
+        if (lmrCategories.length > 0 && !importLmrCategory) {
+            setImportLmrCategory(lmrCategories[0]);
+            if (!selectedLmrFilter || selectedLmrFilter === "ALL") {
+                setSelectedLmrFilter(lmrCategories[0]);
+            }
+        }
+    }, [lmrCategories, importLmrCategory, selectedLmrFilter]);
+
+    // 🔥 AUTO-TAG EXISTING DATABASE RESOURCES WITH FIRST CATEGORY ("LMRDSORCIVIL-DSOR CIVIL CODES ALL")
+    const hasMigratedRef = useRef(false);
+    useEffect(() => {
+        if (hasMigratedRef.current || !resources || resources.length === 0 || !lmrCategories || lmrCategories.length === 0) return;
+        
+        const firstCategory = lmrCategories[0]; // "LMRDSORCIVIL-DSOR CIVIL CODES ALL"
+        const untaggedResources = resources.filter(r => !r.rates?._category && !r.category);
+
+        if (untaggedResources.length > 0) {
+            hasMigratedRef.current = true;
+            console.log(`[LMR Category DB Auto-Sync] Tagging ${untaggedResources.length} existing DB items with 1st category: "${firstCategory}"`);
+            
+            const bulkPayload = untaggedResources.map(r => {
+                const updatedRates = { ...(r.rates || {}), _category: firstCategory };
+                return {
+                    id: r.id,
+                    code: r.code,
+                    description: r.description,
+                    unit: r.unit,
+                    rates: JSON.stringify(updatedRates),
+                    rateHistory: JSON.stringify(r.rateHistory || [])
+                };
+            });
+
+            window.api.db.bulkSaveResources(bulkPayload)
+                .then(() => {
+                    if (typeof loadData === 'function') loadData();
+                })
+                .catch(err => console.error("Failed to auto-tag existing resources in DB:", err));
+        }
+    }, [resources, lmrCategories, loadData]);
+
+    const [addCategoryDialogOpen, setAddCategoryDialogOpen] = useState(false);
+    const [newCategoryName, setNewCategoryName] = useState("");
+    const [categoryError, setCategoryError] = useState("");
+
+    const [deleteCategoryDialogConfig, setDeleteCategoryDialogConfig] = useState({ open: false, categoryName: "" });
+
+    const openDeleteLmrCategoryDialog = useCallback((catName) => {
+        setDeleteCategoryDialogConfig({ open: true, categoryName: catName });
+    }, []);
+
+    const handleConfirmDeleteLmrCategory = useCallback(async () => {
+        const targetCat = deleteCategoryDialogConfig.categoryName;
+        if (!targetCat) return;
+
+        // 1. Remove category from lmrCategories list
+        const updatedCategories = lmrCategories.filter(c => c !== targetCat);
+        const finalCategories = updatedCategories.length > 0 ? updatedCategories : DEFAULT_LMR_GROUPS;
+        setLmrCategories(finalCategories);
+
+        try {
+            // Save updated categories to database
+            await window.api.db.saveSettings('lmr_categories', JSON.stringify(finalCategories));
+        } catch (e) {
+            console.error("Failed to update categories in database:", e);
+        }
+
+        // 2. Delete ALL data / resource records in database belonging to this category
+        const itemsToDelete = resources.filter(r => {
+            const resCat = r.rates?._category || r.category || (lmrCategories[0] === targetCat ? targetCat : null);
+            return resCat === targetCat;
+        });
+
+        console.log(`[Category Delete] Deleting ${itemsToDelete.length} resource records for category "${targetCat}" from database...`);
+
+        for (const item of itemsToDelete) {
+            try {
+                await window.api.db.deleteResource(item.id);
+            } catch (err) {
+                console.error(`Failed to delete resource ${item.id} from database:`, err);
+            }
+        }
+
+        // Reset current active categories if deleted
+        if (importLmrCategory === targetCat) {
+            setImportLmrCategory(finalCategories[0]);
+        }
+        if (selectedLmrFilter === targetCat) {
+            setSelectedLmrFilter(finalCategories[0]);
+        }
+
+        setDeleteCategoryDialogConfig({ open: false, categoryName: "" });
+        if (typeof loadData === 'function') loadData();
+    }, [deleteCategoryDialogConfig, lmrCategories, resources, importLmrCategory, selectedLmrFilter, loadData]);
+
+    const handleAddLmrCategory = useCallback(async () => {
+        const trimmed = newCategoryName.trim();
+        if (!trimmed) {
+            setCategoryError("Category name cannot be empty.");
+            return;
+        }
+        if (lmrCategories.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
+            setCategoryError(`Category "${trimmed}" already exists.`);
+            return;
+        }
+        const updated = [...lmrCategories, trimmed];
+        setLmrCategories(updated);
+        try {
+            // Save updated categories directly into the DATABASE app_settings table
+            await window.api.db.saveSettings('lmr_categories', JSON.stringify(updated));
+        } catch (e) {
+            console.error("Failed to save categories to database:", e);
+        }
+        setImportLmrCategory(trimmed);
+        setSelectedLmrFilter(trimmed);
+        setNewCategoryName("");
+        setCategoryError("");
+        setAddCategoryDialogOpen(false);
+    }, [newCategoryName, lmrCategories]);
 
     useEffect(() => {
         if (importYear === currentYear) {
@@ -334,6 +498,12 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
             // Also hide any orphaned assemblies that were deleted from masterBoqs but still exist in resources
             if (r.code && assemblyCodeRegex.test(String(r.code).trim())) return false;
 
+            // Filter by LMR Group / Category
+            if (selectedLmrFilter !== "ALL") {
+                const resCat = r.rates?._category || r.category || lmrCategories[0];
+                if (resCat !== selectedLmrFilter) return false;
+            }
+
             if (normalizedSearch === "") {
                 if (selectedRegion && hideEmptyRates) {
                     const rate = r.rates?.[selectedRegion];
@@ -378,7 +548,7 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
             }
             return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' });
         });
-    }, [resources, masterBoqs, searchTerm, deferredSearchTerm, selectedRegion, hideEmptyRates]);
+    }, [resources, masterBoqs, searchTerm, deferredSearchTerm, selectedRegion, hideEmptyRates, selectedLmrFilter, lmrCategories]);
 
     const totalPages = Math.ceil(filteredResources.length / itemsPerPage);
     const paginatedResources = useMemo(() => (
@@ -404,7 +574,8 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
     }, []);
 
     const handleRegisterResource = useCallback(async (data) => {
-        const initialRates = {};
+        const activeCat = importLmrCategory || lmrCategories[0];
+        const initialRates = { _category: activeCat };
         regions.forEach(r => {
             initialRates[r.name] = 0;
         });
@@ -415,7 +586,7 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
         };
         await window.api.db.createResource(payload);
         loadData();
-    }, [loadData, regions]);
+    }, [loadData, regions, importLmrCategory, lmrCategories]);
 
     // --- LOGIC HANDLERS ---
 
@@ -622,7 +793,7 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                     const unit = String(row[unitIdx] || 'nos').trim();
                     const rate = Number(row[rateIdx] || 0);
 
-                    if (code && desc) formattedData.push({ code, description: desc, unit, rate });
+                    if (code && desc) formattedData.push({ code, description: desc, unit, rate, category: importLmrCategory || lmrCategories[0] });
                 }
 
                 // Deduplicate formattedData before processing to prevent inserting duplicate DB records
@@ -651,14 +822,15 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                 const total = uniqueFormattedData.length;
                 setUploadStatus({ active: true, current: 0, total, status: 'loading', message: "Parsing Excel file..." });
 
+                const activeCat = importLmrCategory || lmrCategories[0];
                 const bulkPayload = uniqueFormattedData.map(item => {
                     let existingRes = resources.find(r => r.code === item.code);
                     if (existingRes) {
-                        const newRates = { ...existingRes.rates, [importRegion]: item.rate };
+                        const newRates = { ...existingRes.rates, [importRegion]: item.rate, _category: activeCat };
                         const currentHistory = Array.isArray(existingRes.rateHistory) ? existingRes.rateHistory : [];
                         const updatedHistory = [
                             ...currentHistory,
-                            { date: new Date().toISOString().split('T')[0], rate: item.rate, region: importRegion }
+                            { date: new Date().toISOString().split('T')[0], rate: item.rate, region: importRegion, category: activeCat }
                         ];
                         return {
                             id: existingRes.id,
@@ -674,8 +846,8 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                             code: item.code,
                             description: item.description,
                             unit: item.unit,
-                            rates: JSON.stringify({ [importRegion]: item.rate }),
-                            rateHistory: JSON.stringify([{ date: new Date().toISOString().split('T')[0], rate: item.rate, region: importRegion }])
+                            rates: JSON.stringify({ [importRegion]: item.rate, _category: activeCat }),
+                            rateHistory: JSON.stringify([{ date: new Date().toISOString().split('T')[0], rate: item.rate, region: importRegion, category: activeCat }])
                         };
                     }
                 });
@@ -888,12 +1060,115 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
         <Box>
             {/* TOP CONTROLS (IMPORT & REGIONS) */}
             <Grid container spacing={3} mb={3}>
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={7} lg={8}>
                     <Paper elevation={0} sx={styles.paperCard}>
-                        <Typography variant="subtitle2" mb={2} color="text.secondary" sx={styles.monoSubtitle}>// IMPORT_EXCEL_LMR</Typography>
+                        <Box display="flex" alignItems="center" justifyContent="space-between" mb={2.5} flexWrap="wrap" gap={1}>
+                            <Box display="flex" alignItems="center" gap={1.5}>
+                                <Avatar sx={{ bgcolor: alpha('#00e5ff', 0.1), color: '#00e5ff', width: 38, height: 38, border: '1px solid rgba(0, 229, 255, 0.3)' }}>
+                                    <CloudUploadIcon fontSize="small" />
+                                </Avatar>
+                                <Box>
+                                    <Typography variant="subtitle1" fontWeight="bold" sx={{ color: '#fff', fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: '15px', letterSpacing: '0.3px', display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        LMR Data Import & Category Center
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontFamily: "'JetBrains Mono', monospace", fontSize: '11px' }}>
+                                        IMPORT_EXCEL_LMR // CATEGORY_MANAGEMENT
+                                    </Typography>
+                                </Box>
+                            </Box>
+                            <Chip 
+                                icon={<CategoryIcon style={{ color: '#00e5ff', fontSize: 14 }} />}
+                                label={importLmrCategory ? importLmrCategory.split('-')[0] : "DEFAULT"} 
+                                size="small" 
+                                sx={{ 
+                                    bgcolor: alpha('#00e5ff', 0.12), 
+                                    color: '#00e5ff', 
+                                    border: '1px solid rgba(0,229,255,0.3)', 
+                                    fontFamily: "'JetBrains Mono', monospace", 
+                                    fontSize: '11px', 
+                                    fontWeight: 'bold' 
+                                }} 
+                            />
+                        </Box>
+
                         <Grid container spacing={2} alignItems="center">
-                            <Grid item xs={12} sm={4}>
-                                <TextField select fullWidth size="small" label="TARGET REGION" value={importRegion} onChange={e => setImportRegion(e.target.value)}
+                            {/* LMR GROUP / CATEGORY DROPDOWN */}
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    select
+                                    fullWidth
+                                    size="small"
+                                    label="LMR GROUP / CATEGORY"
+                                    value={importLmrCategory}
+                                    onChange={(e) => {
+                                        if (e.target.value === '__ADD_NEW_LMR_CATEGORY__') {
+                                            setAddCategoryDialogOpen(true);
+                                        } else {
+                                            const val = e.target.value;
+                                            setImportLmrCategory(val);
+                                            setSelectedLmrFilter(val);
+                                            setCurrentPage(1);
+                                        }
+                                    }}
+                                    SelectProps={{
+                                        renderValue: (selected) => (
+                                            <Typography variant="body2" sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', color: '#fff', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                                {selected}
+                                            </Typography>
+                                        ),
+                                        MenuProps: {
+                                            PaperProps: {
+                                                sx: {
+                                                    bgcolor: '#0a101d',
+                                                    backgroundImage: 'none',
+                                                    border: '1px solid rgba(0,229,255,0.25)',
+                                                    boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
+                                                    maxHeight: 300,
+                                                    '& .MuiMenuItem-root': { fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', py: 1 }
+                                                }
+                                            }
+                                        }
+                                    }}
+                                >
+                                    {lmrCategories.map((cat) => {
+                                        const isCustom = !DEFAULT_LMR_GROUPS.includes(cat);
+                                        return (
+                                            <MenuItem key={cat} value={cat} sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <Typography variant="body2" sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', flexGrow: 1 }}>
+                                                    {cat}
+                                                </Typography>
+                                                {isCustom && (
+                                                    <IconButton 
+                                                        size="small" 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openDeleteLmrCategoryDialog(cat);
+                                                        }} 
+                                                        sx={{ color: 'rgba(255,255,255,0.4)', '&:hover': { color: '#ef4444', bgcolor: 'rgba(239, 68, 68, 0.15)' }, ml: 1, p: 0.5 }}
+                                                        title="Delete Custom Category & DB Data"
+                                                    >
+                                                        <DeleteIcon style={{ fontSize: 15 }} />
+                                                    </IconButton>
+                                                )}
+                                            </MenuItem>
+                                        );
+                                    })}
+                                    <Divider sx={{ my: 0.5, borderColor: 'rgba(255,255,255,0.1)' }} />
+                                    <MenuItem value="__ADD_NEW_LMR_CATEGORY__" sx={{ color: '#00e5ff', fontWeight: 'bold', fontFamily: "'JetBrains Mono', monospace", display: 'flex', alignItems: 'center' }}>
+                                        <AddIcon fontSize="small" sx={{ mr: 1 }} /> + ADD NEW CATEGORY...
+                                    </MenuItem>
+                                </TextField>
+                            </Grid>
+
+                            {/* TARGET REGION */}
+                            <Grid item xs={12} sm={6}>
+                                <TextField 
+                                    select 
+                                    fullWidth 
+                                    size="small" 
+                                    label="TARGET REGION" 
+                                    value={importRegion} 
+                                    onChange={e => setImportRegion(e.target.value)}
                                     SelectProps={{
                                         MenuProps: {
                                             PaperProps: {
@@ -903,12 +1178,21 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                                                 }
                                             }
                                         }
-                                    }}>
+                                    }}
+                                >
                                     {regions.map(r => <MenuItem key={r.id} value={r.name}>{r.name}</MenuItem>)}
                                 </TextField>
                             </Grid>
-                            <Grid item xs={6} sm={4}>
-                                <TextField select fullWidth size="small" label="YEAR" value={importYear} onChange={e => setImportYear(e.target.value)}
+
+                            {/* YEAR */}
+                            <Grid item xs={6} sm={6}>
+                                <TextField 
+                                    select 
+                                    fullWidth 
+                                    size="small" 
+                                    label="YEAR" 
+                                    value={importYear} 
+                                    onChange={e => setImportYear(e.target.value)}
                                     SelectProps={{
                                         MenuProps: {
                                             PaperProps: {
@@ -918,12 +1202,21 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                                                 }
                                             }
                                         }
-                                    }}>
+                                    }}
+                                >
                                     {Array.from({ length: 6 }, (_, i) => currentYear - 5 + i).map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}
                                 </TextField>
                             </Grid>
-                            <Grid item xs={6} sm={4}>
-                                <TextField select fullWidth size="small" label="QUARTER" value={importQuarter} onChange={e => setImportQuarter(e.target.value)}
+
+                            {/* QUARTER */}
+                            <Grid item xs={6} sm={6}>
+                                <TextField 
+                                    select 
+                                    fullWidth 
+                                    size="small" 
+                                    label="QUARTER" 
+                                    value={importQuarter} 
+                                    onChange={e => setImportQuarter(e.target.value)}
                                     SelectProps={{
                                         MenuProps: {
                                             PaperProps: {
@@ -933,41 +1226,105 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                                                 }
                                             }
                                         }
-                                    }}>
+                                    }}
+                                >
                                     <MenuItem value="JANMAR" disabled={importYear === currentYear && currentQuarterIndex < 0}>JANMAR</MenuItem>
                                     <MenuItem value="APRJUN" disabled={importYear === currentYear && currentQuarterIndex < 1}>APRJUN</MenuItem>
                                     <MenuItem value="JULSEP" disabled={importYear === currentYear && currentQuarterIndex < 2}>JULSEP</MenuItem>
                                     <MenuItem value="OCTDEC" disabled={importYear === currentYear && currentQuarterIndex < 3}>OCTDEC</MenuItem>
                                 </TextField>
                             </Grid>
+
+                            {/* ACTION BUTTONS */}
                             <Grid item xs={12} sm={4}>
                                 <input type="file" accept=".xlsx, .xls, .csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
-                                <Button fullWidth variant="outlined" color="primary" startIcon={<UploadIcon />} disabled={!importRegion} onClick={() => fileInputRef.current.click()} sx={styles.actionButton}>
-                                    UPLOAD_DATA
+                                <Button fullWidth variant="contained" startIcon={<UploadIcon />} disabled={!importRegion} onClick={() => fileInputRef.current.click()} sx={styles.uploadButton}>
+                                    UPLOAD DATA
                                 </Button>
                             </Grid>
+
                             <Grid item xs={12} sm={4}>
-                                <Button fullWidth variant="outlined" color="secondary" startIcon={<DownloadIcon />} onClick={downloadTemplate} sx={styles.actionButton}>
-                                    DOWNLOAD_TEMPLATE
+                                <Button fullWidth variant="outlined" startIcon={<DownloadIcon />} onClick={downloadTemplate} sx={styles.actionButton}>
+                                    TEMPLATE
                                 </Button>
                             </Grid>
+
                             <Grid item xs={12} sm={4}>
-                                <Button fullWidth variant="outlined" color="info" startIcon={<LanguageIcon />} onClick={() => window.open('https://price.kerala.gov.in/price3_pmu/', '_blank')} sx={styles.actionButton}>
-                                    KERALA_PWD
+                                <Button fullWidth variant="outlined" startIcon={<LanguageIcon />} onClick={() => window.open('https://price.kerala.gov.in/price3_pmu/', '_blank')} sx={styles.actionButton}>
+                                    KERALA PWD
                                 </Button>
                             </Grid>
                         </Grid>
                     </Paper>
                 </Grid>
 
-                <Grid item xs={12} md={6}>
+                {/* MANAGE REGIONS CARD */}
+                <Grid item xs={12} md={5} lg={4}>
                     <Paper elevation={0} sx={styles.paperCard}>
-                        <Typography variant="subtitle2" mb={2} color="text.secondary" sx={styles.monoSubtitle}>// MANAGE_REGIONS</Typography>
-                        <Box display="flex" gap={2} flexDirection={{ xs: 'column', sm: 'row' }}>
-                            <TextField fullWidth size="small" label="NEW_REGION" value={newRegion} onChange={e => setNewRegion(e.target.value)} />
-                            <Button variant="contained" disabled={!newRegion} onClick={async () => { await window.api.db.createRegion(newRegion); setNewRegion(""); loadData(); }} sx={styles.addRegionButton}>
-                                ADD_REGION
-                            </Button>
+                        <Box display="flex" alignItems="center" gap={1.5} mb={2.5}>
+                            <Avatar sx={{ bgcolor: alpha('#8b5cf6', 0.1), color: '#8b5cf6', width: 38, height: 38, border: '1px solid rgba(139, 92, 246, 0.3)' }}>
+                                <PublicIcon fontSize="small" />
+                            </Avatar>
+                            <Box>
+                                <Typography variant="subtitle1" fontWeight="bold" sx={{ color: '#fff', fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: '15px', letterSpacing: '0.3px' }}>
+                                    Regional Management
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontFamily: "'JetBrains Mono', monospace", fontSize: '11px' }}>
+                                    MANAGE_REGIONS // ACTIVE_ZONES
+                                </Typography>
+                            </Box>
+                        </Box>
+
+                        <Box display="flex" gap={1.5} flexDirection="column">
+                            <Box display="flex" gap={1.5}>
+                                <TextField 
+                                    fullWidth 
+                                    size="small" 
+                                    label="NEW REGION NAME" 
+                                    value={newRegion} 
+                                    onChange={e => setNewRegion(e.target.value)} 
+                                />
+                                <Button 
+                                    variant="contained" 
+                                    disabled={!newRegion} 
+                                    onClick={async () => { await window.api.db.createRegion(newRegion); setNewRegion(""); loadData(); }} 
+                                    sx={styles.addRegionButton}
+                                >
+                                    <AddIcon fontSize="small" sx={{ mr: 0.5 }} /> ADD
+                                </Button>
+                            </Box>
+
+                            {/* REGION CHIPS LIST */}
+                            {regions && regions.length > 0 && (
+                                <Box mt={1} pt={1.5} borderTop="1px dashed rgba(255,255,255,0.1)">
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontFamily: "'JetBrains Mono', monospace", display: 'block', mb: 1, fontSize: '10px' }}>
+                                        AVAILABLE REGIONS ({regions.length}):
+                                    </Typography>
+                                    <Box display="flex" gap={0.8} flexWrap="wrap" maxHeight={90} sx={{ overflowY: 'auto' }}>
+                                        {regions.map(r => (
+                                            <Chip 
+                                                key={r.id} 
+                                                label={r.name} 
+                                                size="small" 
+                                                onClick={() => setSelectedRegion(r.name)}
+                                                sx={{ 
+                                                    borderRadius: 1.5, 
+                                                    fontFamily: "'JetBrains Mono', monospace", 
+                                                    fontSize: '11px',
+                                                    cursor: 'pointer',
+                                                    bgcolor: selectedRegion === r.name ? alpha('#00e5ff', 0.2) : 'rgba(255,255,255,0.04)',
+                                                    borderColor: selectedRegion === r.name ? '#00e5ff' : 'rgba(255,255,255,0.12)',
+                                                    borderWidth: 1,
+                                                    borderStyle: 'solid',
+                                                    color: selectedRegion === r.name ? '#00e5ff' : 'rgba(255,255,255,0.7)',
+                                                    fontWeight: selectedRegion === r.name ? 'bold' : 'normal',
+                                                    '&:hover': { borderColor: '#00e5ff', bgcolor: alpha('#00e5ff', 0.1) }
+                                                }} 
+                                            />
+                                        ))}
+                                    </Box>
+                                </Box>
+                            )}
                         </Box>
                     </Paper>
                 </Grid>
@@ -982,12 +1339,12 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                         SEARCH_AND_FILTERS
                     </Typography>
                 </Box>
-                <Grid container spacing={2.5} alignItems="center" mb={3}>
-                    <Grid item xs={12} sm={6} md={5}>
+                <Grid container spacing={2} alignItems="center" mb={3}>
+                    <Grid item xs={12} sm={4} md={4}>
                         <SearchInput value={searchTerm} onChange={handleSearchChange} />
                     </Grid>
 
-                    <Grid item xs={12} sm={4} md={3}>
+                    <Grid item xs={12} sm={3} md={3}>
                         <TextField
                             select
                             fullWidth
@@ -1000,7 +1357,60 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                         </TextField>
                     </Grid>
 
-                    <Grid item xs={12} sm={2} md={3}>
+                    <Grid item xs={12} sm={3} md={3}>
+                        <TextField
+                            select
+                            fullWidth
+                            size="small"
+                            label="FILTER BY LMR GROUP"
+                            value={selectedLmrFilter}
+                            onChange={e => setSelectedLmrFilter(e.target.value)}
+                            SelectProps={{
+                                renderValue: (selected) => (
+                                    <Typography variant="body2" sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', color: '#fff', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                        {selected === "ALL" ? "ALL LMR GROUPS" : selected}
+                                    </Typography>
+                                ),
+                                MenuProps: {
+                                    PaperProps: {
+                                        sx: {
+                                            bgcolor: '#0a101d',
+                                            backgroundImage: 'none',
+                                            border: '1px solid rgba(0,229,255,0.2)',
+                                            '& .MuiMenuItem-root': { fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }
+                                        }
+                                    }
+                                }
+                            }}
+                        >
+                            <MenuItem value="ALL">ALL LMR GROUPS</MenuItem>
+                            {lmrCategories.map((cat) => {
+                                const isCustom = !DEFAULT_LMR_GROUPS.includes(cat);
+                                return (
+                                    <MenuItem key={cat} value={cat} sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <Typography variant="body2" sx={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', flexGrow: 1 }}>
+                                            {cat}
+                                        </Typography>
+                                        {isCustom && (
+                                            <IconButton 
+                                                size="small" 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openDeleteLmrCategoryDialog(cat);
+                                                }} 
+                                                sx={{ color: 'rgba(255,255,255,0.4)', '&:hover': { color: '#ef4444', bgcolor: 'rgba(239, 68, 68, 0.15)' }, ml: 1, p: 0.5 }}
+                                                title="Delete Custom Category & DB Data"
+                                            >
+                                                <DeleteIcon style={{ fontSize: 15 }} />
+                                            </IconButton>
+                                        )}
+                                    </MenuItem>
+                                );
+                            })}
+                        </TextField>
+                    </Grid>
+
+                    <Grid item xs={12} sm={2} md={2}>
                         <FormControlLabel
                             control={
                                 <Switch
@@ -1143,6 +1553,147 @@ export default function ResourcesTab({ regions, resources, masterBoqs = [], load
                 onConfirm={handleConfirmDelete}
                 itemName={deleteConfig.type === 'bulk' ? `${deleteConfig.count} selected items` : deleteConfig.name}
             />
+
+            {/* ADD CUSTOM LMR CATEGORY DIALOG */}
+            <Dialog
+                open={addCategoryDialogOpen}
+                onClose={() => { setAddCategoryDialogOpen(false); setNewCategoryName(''); setCategoryError(''); }}
+                PaperProps={{
+                    sx: {
+                        bgcolor: '#0d1527',
+                        backgroundImage: 'none',
+                        color: 'white',
+                        borderRadius: 3,
+                        border: '1px solid rgba(0,229,255,0.3)',
+                        boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
+                        minWidth: { xs: '300px', sm: '440px' }
+                    }
+                }}
+            >
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1.5, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                    <CategoryIcon sx={{ color: '#00e5ff' }} />
+                    <Typography variant="h6" fontWeight="bold" sx={{ fontFamily: "'Inter', sans-serif", fontSize: '17px' }}>
+                        Add Custom LMR Group / Category
+                    </Typography>
+                </DialogTitle>
+
+                <DialogContent sx={{ pt: 3, pb: 2, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        Enter a unique category name for your Local Market Rates dataset (e.g. <code>LMRPLUMBING - PLUMBING CODES ALL</code>).
+                    </Typography>
+
+                    {categoryError && (
+                        <Alert severity="error" sx={{ bgcolor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                            {categoryError}
+                        </Alert>
+                    )}
+
+                    <TextField
+                        autoFocus
+                        fullWidth
+                        size="small"
+                        label="Category Name"
+                        placeholder="e.g. LMRPLUMBING - PLUMBING CODES ALL"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleAddLmrCategory(); }}
+                        InputLabelProps={{ sx: { color: 'text.secondary', fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' } }}
+                        InputProps={{
+                            sx: {
+                                color: 'white',
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: '13px',
+                                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0,229,255,0.3)' },
+                                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#00e5ff' },
+                            }
+                        }}
+                    />
+                </DialogContent>
+
+                <DialogActions sx={{ p: 2.5, pt: 1.5, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                    <Button 
+                        onClick={() => { setAddCategoryDialogOpen(false); setNewCategoryName(''); setCategoryError(''); }} 
+                        sx={{ color: 'text.secondary', fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                        CANCEL
+                    </Button>
+                    <Button 
+                        onClick={handleAddLmrCategory} 
+                        variant="contained" 
+                        sx={{ 
+                            background: 'linear-gradient(90deg, #00e5ff 0%, #0284c7 100%)',
+                            color: '#0a101d',
+                            fontWeight: 'bold',
+                            fontFamily: "'JetBrains Mono', monospace",
+                            boxShadow: '0 4px 14px rgba(0, 229, 255, 0.3)',
+                            '&:hover': { background: 'linear-gradient(90deg, #0284c7 0%, #0369a1 100%)', color: '#fff' }
+                        }}
+                    >
+                        ADD CATEGORY
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* CONFIRM DELETE LMR CATEGORY & ALL ITS DB DATA MODAL */}
+            <Dialog
+                open={deleteCategoryDialogConfig.open}
+                onClose={() => setDeleteCategoryDialogConfig({ open: false, categoryName: "" })}
+                PaperProps={{
+                    sx: {
+                        bgcolor: '#0d1527',
+                        backgroundImage: 'none',
+                        color: 'white',
+                        borderRadius: 3,
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                        boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
+                        minWidth: { xs: '300px', sm: '440px' }
+                    }
+                }}
+            >
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1.5, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                    <DeleteIcon sx={{ color: '#ef4444' }} />
+                    <Typography variant="h6" fontWeight="bold" sx={{ fontFamily: "'Inter', sans-serif", fontSize: '17px', color: '#ef4444' }}>
+                        Delete Category & Complete DB Data
+                    </Typography>
+                </DialogTitle>
+
+                <DialogContent sx={{ pt: 3, pb: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Typography variant="body1" sx={{ mt: 1, color: '#fff', fontWeight: 500 }}>
+                        Are you sure you want to delete this LMR category?
+                    </Typography>
+                    <Paper elevation={0} sx={{ p: 1.5, bgcolor: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontFamily: "'JetBrains Mono', monospace", color: '#ef4444', fontWeight: 'bold' }}>
+                            {deleteCategoryDialogConfig.categoryName}
+                        </Typography>
+                    </Paper>
+                    <Alert severity="warning" sx={{ bgcolor: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.25)' }}>
+                        <strong>PERMANENT DELETION:</strong> This action will delete this category and purge all associated material resource records in the database.
+                    </Alert>
+                </DialogContent>
+
+                <DialogActions sx={{ p: 2.5, pt: 1.5, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                    <Button 
+                        onClick={() => setDeleteCategoryDialogConfig({ open: false, categoryName: "" })} 
+                        sx={{ color: 'text.secondary', fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                        CANCEL
+                    </Button>
+                    <Button 
+                        onClick={handleConfirmDeleteLmrCategory} 
+                        variant="contained" 
+                        color="error"
+                        sx={{ 
+                            background: 'linear-gradient(90deg, #ef4444 0%, #dc2626 100%)',
+                            fontWeight: 'bold',
+                            fontFamily: "'JetBrains Mono', monospace",
+                            boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)',
+                            '&:hover': { background: 'linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)' }
+                        }}
+                    >
+                        DELETE CATEGORY & DATA
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             {/* EXCEL UPLOAD PROGRESS OVERLAY */}
             <Backdrop
