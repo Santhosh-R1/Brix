@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Box, Button, Typography, Paper, TextField, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination, TableSortLabel, InputAdornment, Pagination, IconButton, Backdrop, CircularProgress, useTheme } from "@mui/material";
 import SearchIcon from '@mui/icons-material/Search';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -12,7 +12,7 @@ import AddCategoryModal from "./AddCategoryModal";
 import ConfirmDeleteCategoryModal from "./ConfirmDeleteCategoryModal";
 import AddDatabookEntryModal from "./AddDatabookEntryModal";
 import { getResizerStyle, getViewBoqTabStyles } from "./ViewBoqTab.styles";
-const STATIC_CATEGORIES = [
+const CIVIL_STATIC_CATEGORIES = [
     "2. Earth Work",
     "3. Mortars",
     "4. Concrete work",
@@ -51,6 +51,28 @@ const STATIC_CATEGORIES = [
     "100. KWA Approved Data"
 ];
 
+const ELECTRICAL_STATIC_CATEGORIES = [
+    "1. Wiring",
+    "2. MCCB, MCB & DBS",
+    "3. Rising Mains & Bus Trunking",
+    "4. Cable Trays",
+    "5. Earthing",
+    "6. Lighting Conductor",
+    "7. MV Cable Laying",
+    "8. HT Cable Laying",
+    "9. MV Cable End Termination & Jointing",
+    "10. HV Cable Jointing & End Termination",
+    "11. Pole Erection",
+    "12. MV Over Head Line work",
+    "13. HV Over Head Line Work",
+    "14. Civil Items",
+    "15. Lighting Control",
+    "16. HVAC(Only Plumbing,Ducting & AHU)",
+    "17. Fire Detection and Alarm System",
+    "18. Wet Riser and Sprinkler System",
+    "19. Bee 5 Star Rated Ceiling Fan with Brush Less Direct Current (BLDC) Motor",
+    "90. OD Electrical"
+];
 
 const Resizer = ({ onMouseDown }) => (
     <div onMouseDown={onMouseDown} style={getResizerStyle()} onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(59, 130, 246, 0.2)'} onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'} />
@@ -61,12 +83,68 @@ export default function ViewBoqTab({ masterBoqs, regions, resources, onEditBoq, 
     const styles = getViewBoqTabStyles(theme);
     const [searchCode, setSearchCode] = useState('');
     const [searchDesc, setSearchDesc] = useState('');
+    const [discipline, setDiscipline] = useState('Civil');
     const [selectedCategory, setSelectedCategory] = useState('');
-    const [categories, setCategories] = useState(() => {
-        const saved = localStorage.getItem("custom_categories");
-        const parsed = saved ? JSON.parse(saved) : [];
-        return [...STATIC_CATEGORIES, ...parsed];
-    });
+
+    const [civilCustomCats, setCivilCustomCats] = useState([]);
+    const [electricalCustomCats, setElectricalCustomCats] = useState([]);
+
+    useEffect(() => {
+        let isMounted = true;
+        const loadCategoriesFromDb = async () => {
+            try {
+                // Fetch Civil databook custom categories from database
+                const civilRes = await window.api.db.getSettings('databook_categories_civil');
+                if (isMounted && civilRes) {
+                    const parsed = typeof civilRes === 'string' ? JSON.parse(civilRes) : civilRes;
+                    if (Array.isArray(parsed)) setCivilCustomCats(parsed);
+                } else if (isMounted) {
+                    const legacy = localStorage.getItem("custom_categories_civil") || localStorage.getItem("custom_categories");
+                    if (legacy) {
+                        const parsed = JSON.parse(legacy);
+                        if (Array.isArray(parsed)) {
+                            setCivilCustomCats(parsed);
+                            await window.api.db.saveSettings('databook_categories_civil', JSON.stringify(parsed));
+                        }
+                    }
+                }
+
+                // Fetch Electrical databook custom categories from database
+                const elecRes = await window.api.db.getSettings('databook_categories_electrical');
+                if (isMounted && elecRes) {
+                    const parsed = typeof elecRes === 'string' ? JSON.parse(elecRes) : elecRes;
+                    if (Array.isArray(parsed)) setElectricalCustomCats(parsed);
+                } else if (isMounted) {
+                    const legacyElec = localStorage.getItem("custom_categories_electrical");
+                    if (legacyElec) {
+                        const parsed = JSON.parse(legacyElec);
+                        if (Array.isArray(parsed)) {
+                            setElectricalCustomCats(parsed);
+                            await window.api.db.saveSettings('databook_categories_electrical', JSON.stringify(parsed));
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Error loading databook categories from database:", e);
+            }
+        };
+
+        loadCategoriesFromDb();
+        return () => { isMounted = false; };
+    }, []);
+
+    const staticCategories = useMemo(() => {
+        return discipline === "Civil" ? CIVIL_STATIC_CATEGORIES : ELECTRICAL_STATIC_CATEGORIES;
+    }, [discipline]);
+
+    const activeCategories = useMemo(() => {
+        if (discipline === "Civil") {
+            return [...CIVIL_STATIC_CATEGORIES, ...civilCustomCats];
+        } else {
+            return [...ELECTRICAL_STATIC_CATEGORIES, ...electricalCustomCats];
+        }
+    }, [discipline, civilCustomCats, electricalCustomCats]);
+
     const [categoryModalOpen, setCategoryModalOpen] = useState(false);
     const [categoryToDelete, setCategoryToDelete] = useState(null);
     const [deleteCategoryModalOpen, setDeleteCategoryModalOpen] = useState(false);
@@ -83,23 +161,47 @@ export default function ViewBoqTab({ masterBoqs, regions, resources, onEditBoq, 
         setExpandedDesc(prev => ({ ...prev, [id]: !prev[id] }));
     };
 
-    const handleAddCategory = (newCat) => {
-        const saved = localStorage.getItem("custom_categories");
-        const parsed = saved ? JSON.parse(saved) : [];
-        const updated = [...parsed, newCat];
-        localStorage.setItem("custom_categories", JSON.stringify(updated));
-        setCategories([...STATIC_CATEGORIES, ...updated]);
+    const handleAddCategory = async (newCat) => {
+        if (discipline === "Civil") {
+            const updated = [...civilCustomCats, newCat];
+            setCivilCustomCats(updated);
+            try {
+                await window.api.db.saveSettings('databook_categories_civil', JSON.stringify(updated));
+            } catch (e) {
+                console.error("Failed to save civil category to database:", e);
+            }
+        } else {
+            const updated = [...electricalCustomCats, newCat];
+            setElectricalCustomCats(updated);
+            try {
+                await window.api.db.saveSettings('databook_categories_electrical', JSON.stringify(updated));
+            } catch (e) {
+                console.error("Failed to save electrical category to database:", e);
+            }
+        }
         setSelectedCategory(newCat);
         setPage(0);
     };
 
-    const handleDeleteCategory = () => {
+    const handleDeleteCategory = async () => {
         if (!categoryToDelete) return;
-        const saved = localStorage.getItem("custom_categories");
-        const parsed = saved ? JSON.parse(saved) : [];
-        const updated = parsed.filter(cat => cat !== categoryToDelete);
-        localStorage.setItem("custom_categories", JSON.stringify(updated));
-        setCategories([...STATIC_CATEGORIES, ...updated]);
+        if (discipline === "Civil") {
+            const updated = civilCustomCats.filter(cat => cat !== categoryToDelete);
+            setCivilCustomCats(updated);
+            try {
+                await window.api.db.saveSettings('databook_categories_civil', JSON.stringify(updated));
+            } catch (e) {
+                console.error("Failed to delete civil category from database:", e);
+            }
+        } else {
+            const updated = electricalCustomCats.filter(cat => cat !== categoryToDelete);
+            setElectricalCustomCats(updated);
+            try {
+                await window.api.db.saveSettings('databook_categories_electrical', JSON.stringify(updated));
+            } catch (e) {
+                console.error("Failed to delete electrical category from database:", e);
+            }
+        }
         if (selectedCategory === categoryToDelete) {
             setSelectedCategory('');
             setPage(0);
@@ -444,11 +546,31 @@ export default function ViewBoqTab({ masterBoqs, regions, resources, onEditBoq, 
                     <Button size="small" variant="contained" disableElevation startIcon={<UploadIcon />} onClick={() => excelInputRef.current.click()} sx={styles.actionButton}>IMPORT EXCEL</Button>
                 </Box>
 
-                {/* Bottom Row: Filters (Search, Category) & Upload/Add Entry buttons */}
+                {/* Bottom Row: Filters (Search Code, Search Desc, Discipline, Category) & Upload/Add Entry buttons */}
                 <Box display="flex" alignItems="center" flexWrap="wrap" gap={2}>
                     <TextField placeholder="Search Code..." variant="outlined" size="small" value={searchCode} onChange={(e) => { setSearchCode(e.target.value); setPage(0); }} sx={styles.searchCodeField} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>, sx: styles.searchInputProps }} />
                     <TextField placeholder="Search Description..." variant="outlined" size="small" value={searchDesc} onChange={(e) => { setSearchDesc(e.target.value); setPage(0); }} sx={styles.searchDescField} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>, sx: styles.searchInputProps }} />
 
+                    {/* DISCIPLINE DROPDOWN (CIVIL / ELECTRICAL) */}
+                    <TextField
+                        select
+                        size="small"
+                        label="DISCIPLINE"
+                        value={discipline}
+                        onChange={(e) => {
+                            setDiscipline(e.target.value);
+                            setSelectedCategory('');
+                            setPage(0);
+                        }}
+                        sx={{ flex: 1, minWidth: 140 }}
+                        InputLabelProps={{ sx: styles.categoryInputLabel }}
+                        InputProps={{ sx: styles.searchInputProps }}
+                    >
+                        <MenuItem value="Civil" sx={styles.menuItemDefault}>Civil</MenuItem>
+                        <MenuItem value="Electrical" sx={styles.menuItemDefault}>Electrical</MenuItem>
+                    </TextField>
+
+                    {/* CATEGORY DROPDOWN */}
                     <TextField
                         select
                         size="small"
@@ -471,8 +593,8 @@ export default function ViewBoqTab({ masterBoqs, regions, resources, onEditBoq, 
                     >
                         <MenuItem value="" sx={styles.menuItemDefault}>---select---</MenuItem>
                         <MenuItem value="__ADD_CATEGORY__" sx={styles.menuItemAdd}>+ Add Category</MenuItem>
-                        {categories.map(cat => {
-                            const isCustom = !STATIC_CATEGORIES.includes(cat);
+                        {activeCategories.map(cat => {
+                            const isCustom = !staticCategories.includes(cat);
                             return (
                                 <MenuItem
                                     key={cat}
@@ -574,7 +696,7 @@ export default function ViewBoqTab({ masterBoqs, regions, resources, onEditBoq, 
                 open={categoryModalOpen}
                 onClose={() => setCategoryModalOpen(false)}
                 onAddCategory={handleAddCategory}
-                existingCategories={categories}
+                existingCategories={activeCategories}
             />
 
             <ConfirmDeleteCategoryModal
