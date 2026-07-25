@@ -1,0 +1,8 @@
+*.sh text eol=lf
+* text=auto
+# Force LF for code files
+*.rs text eol=lf
+*.ts text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf

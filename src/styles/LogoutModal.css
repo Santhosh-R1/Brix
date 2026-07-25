@@ -1,0 +1,65 @@
+.logout-dialog-paper {
+    background: rgba(13, 22, 38, 0.9) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 82, 82, 0.3) !important; /* Red warning border */
+    box-shadow: 0 0 30px rgba(255, 82, 82, 0.15) !important;
+    border-radius: 4px !important; /* Technical sharp edges */
+}
+
+.logout-title {
+    font-family: 'JetBrains Mono', monospace !important;
+    color: #ff5252 !important;
+    letter-spacing: 2px;
+    font-weight: 800 !important;
+    text-shadow: 0 0 10px rgba(255, 82, 82, 0.5);
+}
+
+.logout-message {
+    font-family: 'Inter', sans-serif !important;
+    color: #94a3b8 !important;
+    font-size: 0.95rem !important;
+}
+
+.btn-cancel {
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    color: #94a3b8 !important;
+    font-family: 'JetBrains Mono', monospace !important;
+}
+
+.btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.btn-confirm {
+    background: linear-gradient(45deg, #ff5252, #b71c1c) !important;
+    color: white !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-weight: bold !important;
+    box-shadow: 0 0 15px rgba(255, 82, 82, 0.4) !important;
+}
+
+.btn-confirm:hover {
+    background: linear-gradient(45deg, #ff1744, #d50000) !important;
+    box-shadow: 0 0 25px rgba(255, 82, 82, 0.6) !important;
+    transform: scale(1.02);
+}
+
+/* Subtle scanning line animation for the modal */
+.logout-dialog-paper::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: rgba(255, 82, 82, 0.5);
+    animation: scanline 3s linear infinite;
+    z-index: 10;
+}
+
+@keyframes scanline {
+    0% { top: 0; opacity: 0; }
+    50% { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+}

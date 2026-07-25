@@ -1,0 +1,12 @@
+[workspace]
+members = [
+    "crates/daemon",
+    "crates/console",
+    "crates/shared"
+]
+resolver = "2"
+
+[profile.release]
+opt-level = "z"     # Optimize for file size
+lto = true          # Link Time Optimization (faster execution)
+strip = true        # Removes debugging symbols for security

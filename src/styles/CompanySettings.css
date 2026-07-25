@@ -1,0 +1,53 @@
+/* Profile Specific Layout */
+.profile-grid-container {
+    padding: 10px;
+}
+
+.profile-field .MuiOutlinedInput-root {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace !important;
+    transition: all 0.3s ease;
+}
+
+.profile-field .MuiInputLabel-root {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 0.75rem;
+    color: rgba(0, 242, 255, 0.7) !important;
+    letter-spacing: 1px;
+}
+
+.profile-field .MuiOutlinedInput-notchedOutline {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.profile-field:hover .MuiOutlinedInput-notchedOutline {
+    border-color: rgba(0, 242, 255, 0.4) !important;
+}
+
+.profile-logo-frame {
+    width: 140px;
+    height: 140px;
+    border: 1px solid rgba(0, 242, 255, 0.2);
+    background: rgba(13, 31, 60, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    border-radius: 4px;
+}
+
+.profile-logo-frame img {
+    max-width: 90%;
+    max-height: 90%;
+    object-fit: contain;
+}
+
+/* Subtle corner accents for the logo box */
+.profile-logo-frame::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; width: 10px; height: 10px;
+    border-top: 2px solid #00f2ff; border-left: 2px solid #00f2ff;
+}

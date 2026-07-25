@@ -1,0 +1,114 @@
+<?if $(sys.BUILDARCH) = x64 or $(sys.BUILDARCH) = arm64 ?>
+    <?define PlatformProgramFilesFolder = "ProgramFiles64Folder" ?>
+<?else ?>
+    <?define PlatformProgramFilesFolder = "ProgramFilesFolder" ?>
+<?endif ?>
+
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+
+    <Product
+        Id='*'
+        Name='openprix'
+        UpgradeCode='E9C45D8F-E4B0-47F6-A489-F176791E23BB'
+        Manufacturer='GOKUL DC'
+        Language='1033'
+        Codepage='1252'
+        Version='$(var.Version)'>
+
+        <Package Id='*'
+            Keywords='Installer'
+            Description='OpenPrix Core: High-performance Engineering ERP &amp; Server Daemon'
+            Manufacturer='GOKUL DC'
+            InstallerVersion='450'
+            Languages='1033'
+            Compressed='yes'
+            InstallScope='perMachine'
+            SummaryCodepage='1252'
+            />
+
+        <MajorUpgrade
+            Schedule='afterInstallInitialize'
+            DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
+
+        <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1'/>
+        <Property Id='DiskPrompt' Value='openprix Installation'/>
+
+        <Directory Id='TARGETDIR' Name='SourceDir'>
+            <Directory Id='$(var.PlatformProgramFilesFolder)' Name='PFiles'>
+                <Directory Id='APPLICATIONFOLDER' Name='openprix'>
+                    
+                    <Component Id='License' Guid='*'>
+                        <File Id='LicenseFile'
+                            DiskId='1'
+                            Source='LICENSE.rtf'
+                            KeyPath='yes'/>
+                    </Component>
+                    
+                    <Directory Id='Bin' Name='bin'>
+                        <Component Id='Path' Guid='0179073F-0147-4904-AE74-34FEAB856802' KeyPath='yes'>
+                            <Environment
+                                Id='PATH'
+                                Name='PATH'
+                                Value='[Bin]'
+                                Permanent='no'
+                                Part='last'
+                                Action='set'
+                                System='yes'/>
+                        </Component>
+
+                        <Component Id='binary0' Guid='*'>
+                            <File
+                                Id='exe0'
+                                Name='openprix.exe'
+                                DiskId='1'
+                                Source='$(var.CargoTargetBinDir)\openprix.exe'
+                                KeyPath='yes'/>
+                        </Component>
+
+                        <Component Id='binary1' Guid='*'>
+                            <File
+                                Id='exe1'
+                                Name='openprix-tui.exe'
+                                DiskId='1'
+                                Source='$(var.CargoTargetBinDir)\openprix-tui.exe'
+                                KeyPath='yes'/>
+                        </Component>
+                    </Directory>
+                </Directory>
+            </Directory>
+        </Directory>
+
+        <Feature
+            Id='Binaries'
+            Title='Application'
+            Description='Installs the openprix daemon, terminal console, and license.'
+            Level='1'
+            ConfigurableDirectory='APPLICATIONFOLDER'
+            AllowAdvertise='no'
+            Display='expand'
+            Absent='disallow'>
+            
+            <ComponentRef Id='License'/>
+            <ComponentRef Id='binary0'/>
+            <ComponentRef Id='binary1'/>
+
+            <Feature
+                Id='Environment'
+                Title='PATH Environment Variable'
+                Description='Add the install location to the PATH system environment variable. This allows you to type "openprix" or "openprix --t" from any terminal.'
+                Level='1'
+                Absent='allow'>
+                <ComponentRef Id='Path'/>
+            </Feature>
+        </Feature>
+
+        <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize'/>
+        <Property Id='ARPHELPLINK' Value='https://github.com/gokuldc/openprix'/>
+        
+        <UI>
+            <UIRef Id='WixUI_FeatureTree'/>
+        </UI>
+
+        <WixVariable Id='WixUILicenseRtf' Value='LICENSE.rtf'/>
+    </Product>
+</Wix>

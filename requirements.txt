@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+PyMuPDF
+opencv-python-headless
+shapely
+networkx
+python-multipart
+requests
+pandas
+scikit-learn
+openpyxl
+xlrd
+google-genai
+python-dotenv

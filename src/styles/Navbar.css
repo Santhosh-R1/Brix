@@ -1,0 +1,77 @@
+.navbar-root {
+    background: rgba(6, 14, 26, 0.8) !important;
+    backdrop-filter: blur(12px) !important;
+    border-bottom: 1px solid rgba(0, 242, 255, 0.2) !important;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* The neon line under the navbar */
+.navbar-root::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #00f2ff, transparent);
+    opacity: 0.5;
+}
+
+.nav-logo {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-weight: 800 !important;
+    letter-spacing: 2px !important;
+    color: #00f2ff !important;
+    text-shadow: 0 0 10px rgba(0, 242, 255, 0.3);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.nav-logo:hover {
+    text-shadow: 0 0 20px rgba(0, 242, 255, 0.6);
+    transform: translateY(-1px);
+}
+
+/* System Status Pulse */
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    background: rgba(0, 255, 149, 0.05);
+    border: 1px solid rgba(0, 255, 149, 0.2);
+    border-radius: 4px;
+    margin-right: 16px;
+}
+
+.pulse-dot {
+    width: 6px;
+    height: 6px;
+    background-color: #00ff95;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #00ff95;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 149, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(0, 255, 149, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 149, 0); }
+}
+
+.nav-icon-btn {
+    transition: all 0.2s ease !important;
+    border-radius: 8px !important;
+}
+
+.nav-icon-btn:hover {
+    background-color: rgba(0, 242, 255, 0.1) !important;
+    color: #00f2ff !important;
+}
+
+/* Responsive: Hide status on mobile */
+@media (max-width: 600px) {
+    .status-indicator {
+        display: none;
+    }
+}

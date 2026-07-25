@@ -1,0 +1,41 @@
+[package]
+name = "openprix"
+version = "2.0.0"
+edition = "2021"
+authors = ["GOKUL DC <gokuldc93@gmail.com>"]
+description = "OpenPrix Core: High-performance Engineering ERP & Server Daemon"
+homepage = "https://github.com/gokuldc/openprix"
+default-run = "openprix"
+
+[dependencies]
+# The web framework (Replacing Express)
+axum = { version = "0.8", features = ["multipart", "macros"] }
+# The async runtime (Rust doesn't have an event loop built-in like Node, so we use Tokio)
+tokio = { version = "1.0", features = ["full"] }
+# The database driver (Replacing better-sqlite3)
+sqlx = { version = "0.8", features = ["postgres", "runtime-tokio-native-tls", "json"] }
+# JSON conversion and file handling
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# Our shared database models!
+shared = { path = "../shared" }
+tower-http = { version = "0.6", features = ["cors", "compression-full"] }
+uuid = { version = "1.10", features = ["v4"] }
+base64 = "0.22.1"
+rust-embed = "8.0"
+bcrypt = "0.15"
+open = "5.0.0"
+mime_guess = "2.0.4"
+jsonwebtoken = "9.3"
+chrono = "0.4"
+ammonia = "4.0"
+dotenvy = "0.15.7"
+
+[target.'cfg(windows)'.dependencies]
+tray-icon = "0.19"
+tao = "0.30"
+image = "0.25"
+
+[[bin]]
+name = "openprix"
+path = "src/main.rs"

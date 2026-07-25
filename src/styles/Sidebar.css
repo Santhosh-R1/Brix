@@ -1,0 +1,80 @@
+:root {
+    --sidebar-bg: rgba(13, 31, 60, 0.8);
+    --sidebar-border: rgba(0, 242, 255, 0.2);
+    --neon-cyan: #00f2ff;
+    --transition-speed: 0.3s;
+    --transition-curve: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-container {
+    background: var(--sidebar-bg) !important;
+    backdrop-filter: blur(15px);
+    border-right: 1px solid var(--sidebar-border) !important;
+    transition: width var(--transition-speed) var(--transition-curve) !important;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    z-index: 1200;
+}
+
+/* Sidebar Item Styling */
+.nav-item-button {
+    margin: 4px 8px !important;
+    border-radius: 8px !important;
+    transition: all 0.2s ease !important;
+    min-height: 48px;
+    position: relative;
+    color: #94a3b8 !important; /* Muted slate color */
+}
+
+.nav-item-button:hover {
+    background: rgba(0, 242, 255, 0.08) !important;
+    color: var(--neon-cyan) !important;
+}
+
+/* Active State with Neon Indicator */
+.nav-item-active {
+    background: rgba(0, 242, 255, 0.12) !important;
+    color: var(--neon-cyan) !important;
+}
+
+.nav-item-active::before {
+    content: "";
+    position: absolute;
+    left: -8px;
+    top: 20%;
+    height: 60%;
+    width: 4px;
+    background: var(--neon-cyan);
+    box-shadow: 0 0 10px var(--neon-cyan);
+    border-radius: 0 4px 4px 0;
+}
+
+/* Typography */
+.nav-text {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    transition: opacity 0.2s ease;
+}
+
+/* Profile Section at bottom */
+.sidebar-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 10px 0;
+    margin-top: auto;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive Overrides */
+@media (max-width: 900px) {
+    .sidebar-mobile-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 1150;
+        backdrop-filter: blur(4px);
+    }
+}

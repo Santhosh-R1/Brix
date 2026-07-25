@@ -1,0 +1,207 @@
+:root {
+  --blueprint-bg: #0a1628;
+  --blueprint-bg-dark: #060e1a;
+  --blueprint-surface: #0d1f3c;
+  --blueprint-surface-hover: #132a4f;
+  --blueprint-grid: rgba(59, 130, 246, 0.08);
+  --blueprint-grid-major: rgba(59, 130, 246, 0.15);
+  --blueprint-border: #1e3a5f;
+  --blueprint-border-light: rgba(59, 130, 246, 0.3);
+  --blueprint-accent: #3b82f6;
+  --blueprint-accent-light: #60a5fa;
+  --blueprint-accent-glow: rgba(59, 130, 246, 0.4);
+  --blueprint-text: #94a3b8;
+  --blueprint-text-primary: #e2e8f0;
+  --blueprint-text-heading: #ffffff;
+  --blueprint-cyan: #22d3ee;
+  --blueprint-cyan-dim: rgba(34, 211, 238, 0.6);
+  --blueprint-amber: #f59e0b;
+  --blueprint-success: #10b981;
+  --blueprint-error: #ef4444;
+  --blueprint-code-bg: #0c1929;
+
+  --sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --heading: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'JetBrains Mono', 'Fira Code', ui-monospace, Consolas, monospace;
+
+  font: 16px/150% var(--sans);
+  letter-spacing: 0.2px;
+  color-scheme: dark;
+  background: var(--blueprint-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  @media (max-width: 1024px) {
+    font-size: 14px;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--blueprint-bg);
+  color: var(--blueprint-text);
+  /* 🔥 ELECTRON FIX: Prevents the background from intercepting clicks */
+  -webkit-app-region: no-drag;
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  text-align: left;
+  border: none;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background:
+    linear-gradient(var(--blueprint-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--blueprint-grid) 1px, transparent 1px),
+    linear-gradient(var(--blueprint-grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--blueprint-grid-major) 1px, transparent 1px),
+    var(--blueprint-bg);
+  background-size:
+    20px 20px,
+    20px 20px,
+    100px 100px,
+    100px 100px,
+    var(--blueprint-bg);
+}
+
+h1,
+h2 {
+  font-family: var(--heading);
+  font-weight: 600;
+  color: var(--blueprint-text-heading);
+  letter-spacing: -0.5px;
+}
+
+h1 {
+  font-size: 36px;
+  margin: 24px 0;
+
+  @media (max-width: 1024px) {
+    font-size: 28px;
+    margin: 16px 0;
+  }
+}
+
+h2 {
+  font-size: 22px;
+  line-height: 130%;
+  margin: 0 0 8px;
+
+  @media (max-width: 1024px) {
+    font-size: 18px;
+  }
+}
+
+p {
+  margin: 0;
+}
+
+code,
+.counter {
+  font-family: var(--mono);
+  display: inline-flex;
+  border-radius: 4px;
+  color: var(--blueprint-cyan);
+}
+
+code {
+  font-size: 14px;
+  line-height: 140%;
+  padding: 4px 8px;
+  background: var(--blueprint-code-bg);
+  border: 1px solid var(--blueprint-border);
+}
+
+/* Blueprint selection */
+::selection {
+  background: var(--blueprint-accent-glow);
+  color: var(--blueprint-text-heading);
+}
+
+/* ==========================================================================
+   GLOBAL CUSTOM SCROLLBARS (Dark Theme)
+   ========================================================================== */
+
+/* Webkit (Chrome, Edge, Safari, Electron) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(13, 31, 60, 0.3);
+  border-radius: 4px;
+  border: 1px solid var(--blueprint-border);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #1e3a5f 0%, #2563eb 100%);
+  border-radius: 6px;
+  border: 2px solid rgba(13, 31, 60, 0.8);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #3b82f6 0%, #60a5fa 100%);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, #60a5fa 0%, #93c5fd 100%);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox Support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.4) rgba(13, 31, 60, 0.3);
+}
+
+/* Placeholder alignment for all inputs */
+::placeholder,
+::-webkit-input-placeholder,
+::-moz-placeholder {
+  text-align: left;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: inherit;
+  opacity: 0.6;
+}
+
+/* ========================================================
+   🔥 ELECTRON INPUT & CURSOR FIX 
+   ======================================================== */
+input,
+textarea,
+select,
+.MuiInputBase-input,
+[contenteditable="true"] {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  cursor: text !important;
+  -webkit-app-region: no-drag !important;
+  pointer-events: auto !important;
+}
+
+/* Fix for Portals: Ensures dragged table rows look correct outside the table context */
+body>.MuiTableRow-root {
+  display: table !important;
+  background-color: #0b172d !important;
+  /* Match your app background */
+  border: 1px solid #3b82f6 !important;
+  outline: none;
+}
+
+body>.MuiTableRow-root .MuiTableCell-root {
+  border-bottom: none !important;
+  color: white !important;
+}

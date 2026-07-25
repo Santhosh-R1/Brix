@@ -1,0 +1,100 @@
+/* Import JetBrains Mono */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+.login-page {
+    background: radial-gradient(circle at center, #0d1f3c 0%, #060e1a 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Background decorative element */
+.login-page::before {
+    content: "";
+    position: absolute;
+    width: 200%;
+    height: 200%;
+    background-image: linear-gradient(rgba(0, 242, 255, 0.03) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(0, 242, 255, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+    z-index: 0;
+}
+
+.login-card {
+    position: relative;
+    z-index: 1;
+    background: rgba(13, 31, 60, 0.8) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 242, 255, 0.3) !important;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(0, 242, 255, 0.05);
+    border-radius: 4px !important; /* Sharp technical edges */
+    transition: all 0.3s ease-in-out;
+}
+
+.login-card:hover {
+    border-color: rgba(0, 242, 255, 0.6) !important;
+    box-shadow: 0 0 30px rgba(0, 242, 255, 0.1);
+}
+
+.brand-logo {
+    letter-spacing: 4px !important;
+    text-shadow: 0 0 10px rgba(0, 242, 255, 0.5);
+    animation: glow 3s infinite alternate;
+}
+
+@keyframes glow {
+    from { text-shadow: 0 0 5px rgba(0, 242, 255, 0.4); }
+    to { text-shadow: 0 0 15px rgba(0, 242, 255, 0.8); }
+}
+
+/* Custom Textfield Overrides */
+.custom-textfield .MuiOutlinedInput-root {
+    color: #e0e0e0 !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.custom-textfield .MuiInputLabel-root {
+    color: #64ffda !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+}
+
+.custom-textfield .MuiOutlinedInput-notchedOutline {
+    border-color: rgba(0, 242, 255, 0.2) !important;
+}
+
+.custom-textfield .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+    border-color: rgba(0, 242, 255, 0.5) !important;
+}
+
+.custom-textfield .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+    border-color: #00f2ff !important;
+    border-width: 1px !important;
+}
+
+/* Button Styling */
+.auth-button {
+    background: linear-gradient(45deg, #00c6ff, #0072ff) !important;
+    color: white !important;
+    font-weight: bold !important;
+    border-radius: 2px !important;
+    transition: transform 0.1s active !important;
+}
+
+.auth-button:hover {
+    background: linear-gradient(45deg, #00d4ff, #0082ff) !important;
+    box-shadow: 0 0 15px rgba(0, 242, 255, 0.4) !important;
+}
+
+.footer-text {
+    font-size: 10px !important;
+    color: #4a5d75 !important;
+    text-align: center;
+    margin-top: 30px !important;
+    letter-spacing: 1px;
+}
